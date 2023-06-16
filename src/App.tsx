@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { AlertDialogProps } from "@chakra-ui/react";
 import {
   Alert,
   AlertDescription,
@@ -42,7 +43,6 @@ import {
   PopoverTrigger,
   SimpleGrid,
   Skeleton,
-  Slide,
   Spacer,
   Stack,
   Tag,
@@ -109,8 +109,10 @@ function formatMoney(cents: number) {
 
 type AppContext = {
   user: User | null;
-  player: Player | null;
   isUserLoading: boolean;
+  player: Player | null;
+  isPlayerLoading: boolean;
+  playerError: PostgrestError | null;
 
   isEventsLoading: boolean;
   eventsError: PostgrestError | null;
@@ -131,6 +133,8 @@ type AppContext = {
 };
 const AppContext = createContext<AppContext>({
   player: null,
+  isPlayerLoading: true,
+  playerError: null,
   activities: [],
   isActivitiesLoading: true,
   activitiesError: null,
@@ -223,13 +227,17 @@ function ActivityCard({ activity }: { activity: Activity }) {
   const toast = useToast();
   const { player, activeEvent, votes, rsvps } = useContext(AppContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const cancelRef = useRef();
+  const cancelRef =
+    useRef<AlertDialogProps["leastDestructiveRef"]["current"]>(null);
   const canVote = !!player && !!activeEvent;
 
   const intervalID = useRef<number | null>(null);
   const [thumbnailIndex, setThumbnailIndex] = useState(0);
 
-  const activityVotes = votes.filter(vote => vote.event_id === activeEvent?.id && vote.activity_id === activity.id);
+  const activityVotes = votes.filter(
+    (vote) =>
+      vote.event_id === activeEvent?.id && vote.activity_id === activity.id
+  );
 
   const isVotedForByPlayer = votes.find(
     (vote) => vote.player_id === player?.id && vote.activity_id === activity.id
@@ -406,8 +414,20 @@ function ActivityCard({ activity }: { activity: Activity }) {
             </CardFooter>
           </>
         )}
-        <AvatarGroup position={"absolute"} size={"sm"} bottom={"-4%"} translateY={"-50%"} max={10}>
-          {activityVotes.map(vote => <Avatar className="activity-vote-avatar" key={vote.id} name={vote.player_id} />)}
+        <AvatarGroup
+          position={"absolute"}
+          size={"sm"}
+          bottom={"-4%"}
+          translateY={"-50%"}
+          max={10}
+        >
+          {activityVotes.map((vote) => (
+            <Avatar
+              className="activity-vote-avatar"
+              key={vote.id}
+              name={vote.player_id}
+            />
+          ))}
         </AvatarGroup>
       </Card>
 
@@ -427,9 +447,7 @@ function ActivityCard({ activity }: { activity: Activity }) {
             By casting a vote, you are RSVPing to game night tonight.
           </AlertDialogBody>
           <AlertDialogFooter>
-            <Button ref={cancelRef} onClick={onClose}>
-              Cancel
-            </Button>
+            <Button onClick={onClose}>Cancel</Button>
             <Button
               colorScheme="green"
               ml={"3"}
@@ -708,7 +726,7 @@ function App() {
 
   const [isVotesLoading, votesError, votes] = useTable<Vote>(
     "votes",
-    voteFilters.initial,
+    voteFilters.initial as [string, string, string][],
     voteFilters.update
   );
   const [isUserLoading, user] = useUser();
@@ -726,13 +744,15 @@ function App() {
   );
   const [isRsvpsLoading, rsvpsError, rsvps] = useTable<RSVP>(
     "rsvps",
-    rsvpFilters.initial,
+    rsvpFilters.initial as [string, string, string][],
     rsvpFilters.update
   );
 
   const appData = useMemo<AppContext>(
     () => ({
       player,
+      isPlayerLoading,
+      playerError,
       isActivitiesLoading,
       activitiesError,
       activities,
@@ -751,6 +771,8 @@ function App() {
     }),
     [
       player,
+      isPlayerLoading,
+      playerError,
       isActivitiesLoading,
       activitiesError,
       activities,
