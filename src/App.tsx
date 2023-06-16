@@ -20,6 +20,7 @@ import {
   AlertTitle,
   Avatar,
   AvatarBadge,
+  AvatarGroup,
   Box,
   Button,
   ButtonGroup,
@@ -41,6 +42,7 @@ import {
   PopoverTrigger,
   SimpleGrid,
   Skeleton,
+  Slide,
   Spacer,
   Stack,
   Tag,
@@ -227,6 +229,8 @@ function ActivityCard({ activity }: { activity: Activity }) {
   const intervalID = useRef<number | null>(null);
   const [thumbnailIndex, setThumbnailIndex] = useState(0);
 
+  const activityVotes = votes.filter(vote => vote.event_id === activeEvent?.id && vote.activity_id === activity.id);
+
   const isVotedForByPlayer = votes.find(
     (vote) => vote.player_id === player?.id && vote.activity_id === activity.id
   );
@@ -238,7 +242,7 @@ function ActivityCard({ activity }: { activity: Activity }) {
   const startThumbnailLoop = () => {
     intervalID.current = setInterval(
       () => setThumbnailIndex((i) => (i + 1) % activity.thumbnail_urls.length),
-      3000
+      1500
     ) as unknown as number;
   };
   const stopThumbnailLoop = () => {
@@ -402,6 +406,9 @@ function ActivityCard({ activity }: { activity: Activity }) {
             </CardFooter>
           </>
         )}
+        <AvatarGroup position={"absolute"} size={"sm"} bottom={"-4%"} translateY={"-50%"} max={10}>
+          {activityVotes.map(vote => <Avatar className="activity-vote-avatar" key={vote.id} name={vote.player_id} />)}
+        </AvatarGroup>
       </Card>
 
       <AlertDialog
@@ -521,7 +528,7 @@ function ActiveEventView() {
           <Bar options={options} data={data} />
         </Stack>
         <Stack spacing={"5"} flex={"1"}>
-          <Heading as="h3">Who's {isUserRsvped && "Also"} Coming?</Heading>
+          <Heading as="h3">Who's Coming?</Heading>
           <Wrap spacing={"3"}>
             {rsvps?.map((rsvp) => (
               <WrapItem key={rsvp.player_id}>

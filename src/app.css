@@ -4,3 +4,19 @@
 .activity-card:hover {
     transform: scale(1.02);
 }
+
+.activity-vote-avatar {
+    animation-name: slidein;
+    animation-duration: 0.5s;
+}
+
+@keyframes slidein {
+    from {
+      opacity: 0;
+      transform: translateY(70%);
+    }
+  
+    to {
+      opacity: 1;
+    }
+  }

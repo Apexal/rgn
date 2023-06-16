@@ -33,9 +33,15 @@ export function useDocument<T extends { id: string | number }>(
   const [row, setRow] = useState<T | null>(null);
 
   useEffect(() => {
+    if (!id) {
+      setRow(null);
+      return;
+    }
+    setIsLoading(true);
     supabase
       .from(tableName)
       .select("*")
+      .eq("id", id)
       .limit(1)
       .maybeSingle()
       .then(({ data, error }) => {
@@ -47,6 +53,7 @@ export function useDocument<T extends { id: string | number }>(
         }
 
         setIsLoading(false);
+    
         setRow(data as unknown as T);
       });
 
