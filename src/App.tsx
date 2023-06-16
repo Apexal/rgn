@@ -1,4 +1,11 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Alert,
   AlertDescription,
@@ -18,6 +25,14 @@ import {
   HStack,
   Heading,
   Image,
+  Link,
+  Popover,
+  PopoverArrow,
+  PopoverBody,
+  PopoverCloseButton,
+  PopoverContent,
+  PopoverHeader,
+  PopoverTrigger,
   SimpleGrid,
   Skeleton,
   Spacer,
@@ -33,6 +48,9 @@ import {
 import { PostgrestError, User, createClient } from "@supabase/supabase-js";
 import { Database } from "./database.types";
 import formatRelative from "date-fns/formatRelative";
+
+import "./app.css";
+
 const supabaseUrl = "https://dmxnczlntlpsvwgutlml.supabase.co";
 const supabaseKey =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRteG5jemxudGxwc3Z3Z3V0bG1sIiwicm9sZSI6ImFub24iLCJpYXQiOjE2ODY4MDMyMjUsImV4cCI6MjAwMjM3OTIyNX0.RBafDsI9C_QuV4ulNJ0ziqyg7cBwinmFr3jDWBPnc_o";
@@ -236,13 +254,43 @@ function ActivitySkeleton() {
 
 /** Displays the details of an activity along with actions to vote and favorite. */
 function ActivityCard({ activity }: { activity: Activity }) {
+  const { activeEvent } = useContext(AppContext);
+
+  const intervalID = useRef<number | null>(null);
+  const [thumbnailIndex, setThumbnailIndex] = useState(0);
+
+  const startThumbnailLoop = () => {
+    intervalID.current = setInterval(
+      () => setThumbnailIndex((i) => (i + 1) % activity.thumbnail_urls.length),
+      3000
+    ) as unknown as number;
+  };
+  const stopThumbnailLoop = () => {
+    clearInterval(intervalID.current!);
+    intervalID.current = null;
+  };
+
+  useEffect(() => {
+    if (thumbnailIndex >= activity.thumbnail_urls.length) {
+      setThumbnailIndex(0);
+    }
+    return stopThumbnailLoop;
+  }, [activity.thumbnail_urls]);
+
   return (
-    <Card>
+    <Card
+      onMouseEnter={() => startThumbnailLoop()}
+      onMouseLeave={() => stopThumbnailLoop()}
+      className="activity-card"
+    >
       <CardBody>
         <Image
           borderRadius={"lg"}
+          height="150px"
+          objectFit="cover"
+          width={"100%"}
           alt={activity.name}
-          src="https://th.bing.com/th/id/OIP.vaWPHjLHKA1TgRqH1IfvoQHaEK?pid=ImgDet&rs=1"
+          src={activity.thumbnail_urls[thumbnailIndex]}
         />
         <Stack mt={6} spacing={3}>
           <Heading size="lg">{activity.name}</Heading>
@@ -256,7 +304,7 @@ function ActivityCard({ activity }: { activity: Activity }) {
             </Text>
           ) : (
             <Text color="blue.600" fontSize="xl">
-              <strong>Free!!!</strong>
+              <strong>Free!</strong>
             </Text>
           )}
           <Wrap>
@@ -271,10 +319,12 @@ function ActivityCard({ activity }: { activity: Activity }) {
       <Divider />
       <CardFooter>
         <ButtonGroup spacing={2}>
-          <Button variant={"solid"} colorScheme={"blue"}>
-            Vote to Play
-          </Button>
-          <Button variant="ghost" colorScheme="blue">
+          {activeEvent && (
+            <Button variant={"solid"} colorScheme={"blue"}>
+              Vote to Play
+            </Button>
+          )}
+          <Button variant={activeEvent ? "ghost" : "solid"} colorScheme="blue">
             Favorite
           </Button>
         </ButtonGroup>
@@ -393,7 +443,7 @@ function App() {
             <Heading>
               {activeEvent
                 ? "What do you want to play tonight?"
-                : "Browse Activities"}
+                : "Our Activities"}
             </Heading>
             {activitiesError && (
               <Alert status="error" my={"5"}>
@@ -408,6 +458,27 @@ function App() {
                     <ActivityCard key={activity.id} activity={activity} />
                   ))}
             </SimpleGrid>
+
+            <Popover placement="left-start">
+              <PopoverTrigger>
+                <Button>Don't see something you like?</Button>
+              </PopoverTrigger>
+              <PopoverContent>
+                <PopoverArrow />
+                <PopoverBody>
+                  Drop a message in{" "}
+                  <Link
+                    color="teal.500"
+                    href="https://discord.com/channels/572259473834377255/1118403797681713265"
+                    isExternal
+                  >
+                    #🕹-game-night
+                  </Link>{" "}
+                  with your game/activity suggestion and I'll get it added
+                  immediately!
+                </PopoverBody>
+              </PopoverContent>
+            </Popover>
           </main>
         ) : (
           <Heading as={"p"} fontSize={"3xl"}>

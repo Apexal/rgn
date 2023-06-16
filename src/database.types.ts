@@ -48,6 +48,7 @@ export interface Database {
           recommended_players: number | null
           summary: string | null
           tags: string[]
+          thumbnail_urls: string[]
           type: string
         }
         Insert: {
@@ -63,6 +64,7 @@ export interface Database {
           recommended_players?: number | null
           summary?: string | null
           tags?: string[]
+          thumbnail_urls?: string[]
           type: string
         }
         Update: {
@@ -78,6 +80,7 @@ export interface Database {
           recommended_players?: number | null
           summary?: string | null
           tags?: string[]
+          thumbnail_urls?: string[]
           type?: string
         }
         Relationships: []
