@@ -12,6 +12,8 @@ import {
   AlertIcon,
   AlertTitle,
   Avatar,
+  AvatarBadge,
+  AvatarGroup,
   Box,
   Button,
   ButtonGroup,
@@ -111,36 +113,40 @@ function useUser(): [boolean, User | null] {
 }
 
 function useTable<T extends { id: any }>(
-  tableName: keyof Database["public"]["Tables"]
+  tableName: keyof Database["public"]["Tables"],
+  initialFilters: [string, string, string][] | undefined = undefined,
+  updateFilter: string | undefined = undefined
 ): [boolean, PostgrestError | null, T[]] {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<PostgrestError | null>(null);
   const [rows, setRows] = useState<T[]>([]);
 
   useEffect(() => {
-    supabase
-      .from(tableName)
-      .select("*")
-      .then(({ data, error }) => {
-        if (error) {
-          console.error(error);
-          setError(error);
-        } else {
-          setError(null);
-        }
+    let query = supabase.from(tableName).select("*");
 
-        setIsLoading(false);
-        setRows((data as unknown as T[]) ?? []);
-      });
+    initialFilters?.forEach((filter) => (query = query.filter(...filter)));
+
+    query.then(({ data, error }) => {
+      if (error) {
+        console.error(error);
+        setError(error);
+      } else {
+        setError(null);
+      }
+
+      setIsLoading(false);
+      setRows((data as unknown as T[]) ?? []);
+    });
 
     const channel = supabase
-      .channel("schema-db-changes")
+      .channel(`${tableName}-all-channel`)
       .on(
         "postgres_changes",
         {
           event: "UPDATE",
           schema: "public",
           table: tableName,
+          filter: updateFilter,
         },
         (payload) => {
           setRows((rows) =>
@@ -156,6 +162,7 @@ function useTable<T extends { id: any }>(
           event: "INSERT",
           schema: "public",
           table: tableName,
+          filter: updateFilter,
         },
         (payload) => setRows((rows) => [...rows, payload.new as T])
       )
@@ -165,12 +172,14 @@ function useTable<T extends { id: any }>(
           event: "DELETE",
           schema: "public",
           table: tableName,
+          filter: updateFilter,
         },
         (payload) =>
           setRows((rows) => rows.filter((row) => row.id !== payload.old.id))
       )
-      .subscribe();
-
+      .subscribe((status) =>
+        console.log(`Subbed to table ${tableName} with status ${status}`)
+      );
     return () => {
       channel
         .unsubscribe()
@@ -178,7 +187,7 @@ function useTable<T extends { id: any }>(
           console.log(`Unsubbed from table ${tableName} with status ${val}`)
         );
     };
-  }, []);
+  }, [tableName]);
 
   return [isLoading, error, rows];
 }
@@ -298,9 +307,7 @@ function ActivityCard({ activity }: { activity: Activity }) {
           {activity.price ? (
             <Text color="blue.600" fontSize="xl">
               <strong>{formatMoney(activity.price)}</strong>{" "}
-              {activity.price_type === "once"
-                ? "one-time purchase"
-                : "subscription"}
+              {activity.price_type === "subscription" && "subscription"}
             </Text>
           ) : (
             <Text color="blue.600" fontSize="xl">
@@ -330,6 +337,44 @@ function ActivityCard({ activity }: { activity: Activity }) {
         </ButtonGroup>
       </CardFooter>
     </Card>
+  );
+}
+
+/** Overview of active event displaying RSVPs, votes, and actions to RSVP. */
+function ActiveEventView() {
+  const { activeEvent } = useContext(AppContext);
+  const [isRsvpsLoading, rsvpsError, rsvps] = useTable<RSVP>(
+    "rsvps",
+    [["event_id", "eq", activeEvent!.id.toString()]],
+    `event_id=eq.${activeEvent!.id}`
+  );
+
+  if (!activeEvent) {
+    console.warn("No active event yet ActiveEventView is being rendered");
+    return null;
+  }
+
+  return (
+    <Box p={"6"} borderWidth={"1px"} borderRadius={"lg"} my={"10"}>
+      <Flex gap={"3"}>
+        <Stack flex={"0.5"}>
+          <Heading as="h3">Countdown</Heading>
+          <Text fontSize={"3xl"}>00:00:00</Text>
+        </Stack>
+        <Stack spacing={"3"} flex={"1"}>
+          <Heading as="h3">Who's Coming?</Heading>
+          <Wrap spacing={"3"}>
+            {rsvps?.map((rsvp) => (
+              <WrapItem key={rsvp.id}>
+                <Avatar name={"Frank"}>
+                  <AvatarBadge bg="green.500" boxSize={"1.25em"} />
+                </Avatar>
+              </WrapItem>
+            ))}
+          </Wrap>
+        </Stack>
+      </Flex>
+    </Box>
   );
 }
 
@@ -372,6 +417,53 @@ function NoActiveEventView() {
         )}
       </AlertDescription>
     </Alert>
+  );
+}
+
+function ActivityView() {
+  const { activeEvent, activitiesError, activities, isActivitiesLoading } =
+    useContext(AppContext);
+
+  return (
+    <>
+      <Heading>
+        {activeEvent ? "What do you want to play tonight?" : "Our Activities"}
+      </Heading>
+      {activitiesError && (
+        <Alert status="error" my={"5"}>
+          <AlertIcon /> There was an error fetching the activities. Blame Frank
+          and try again later!
+        </Alert>
+      )}
+      <SimpleGrid columns={3} spacing={10} my={10}>
+        {isActivitiesLoading && !activities
+          ? [1, 2, 3].map((_, index) => <ActivitySkeleton key={index} />)
+          : activities!.map((activity) => (
+              <ActivityCard key={activity.id} activity={activity} />
+            ))}
+      </SimpleGrid>
+
+      <Popover placement="left-start">
+        <PopoverTrigger>
+          <Button>Missing something?</Button>
+        </PopoverTrigger>
+        <PopoverContent>
+          <PopoverArrow />
+          <PopoverBody>
+            Drop a message in{" "}
+            <Link
+              color="teal.500"
+              href="https://discord.com/channels/572259473834377255/1118403797681713265"
+              isExternal
+            >
+              #🕹-game-night
+            </Link>{" "}
+            with your game/activity suggestion and I'll get it added
+            immediately!
+          </PopoverBody>
+        </PopoverContent>
+      </Popover>
+    </>
   );
 }
 
@@ -438,47 +530,9 @@ function App() {
               Rathskeller Game Night
             </Heading>
 
-            {activeEvent ? null : <NoActiveEventView />}
+            {activeEvent ? <ActiveEventView /> : <NoActiveEventView />}
 
-            <Heading>
-              {activeEvent
-                ? "What do you want to play tonight?"
-                : "Our Activities"}
-            </Heading>
-            {activitiesError && (
-              <Alert status="error" my={"5"}>
-                <AlertIcon /> There was an error fetching the activities. Blame
-                Frank and try again later!
-              </Alert>
-            )}
-            <SimpleGrid columns={3} spacing={10} my={10}>
-              {isActivitiesLoading && !activities
-                ? [1, 2, 3].map((_, index) => <ActivitySkeleton key={index} />)
-                : activities!.map((activity) => (
-                    <ActivityCard key={activity.id} activity={activity} />
-                  ))}
-            </SimpleGrid>
-
-            <Popover placement="left-start">
-              <PopoverTrigger>
-                <Button>Don't see something you like?</Button>
-              </PopoverTrigger>
-              <PopoverContent>
-                <PopoverArrow />
-                <PopoverBody>
-                  Drop a message in{" "}
-                  <Link
-                    color="teal.500"
-                    href="https://discord.com/channels/572259473834377255/1118403797681713265"
-                    isExternal
-                  >
-                    #🕹-game-night
-                  </Link>{" "}
-                  with your game/activity suggestion and I'll get it added
-                  immediately!
-                </PopoverBody>
-              </PopoverContent>
-            </Popover>
+            <ActivityView />
           </main>
         ) : (
           <Heading as={"p"} fontSize={"3xl"}>
