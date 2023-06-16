@@ -165,6 +165,49 @@ export interface Database {
           }
         ]
       }
+      votes: {
+        Row: {
+          activity_id: number
+          created_at: string | null
+          event_id: number
+          id: number
+          player_id: string
+        }
+        Insert: {
+          activity_id: number
+          created_at?: string | null
+          event_id: number
+          id?: number
+          player_id: string
+        }
+        Update: {
+          activity_id?: number
+          created_at?: string | null
+          event_id?: number
+          id?: number
+          player_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "votes_activity_id_fkey"
+            columns: ["activity_id"]
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "votes_event_id_fkey"
+            columns: ["event_id"]
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "votes_player_id_fkey"
+            columns: ["player_id"]
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never

@@ -1,7 +1,7 @@
 import { User, PostgrestError } from "@supabase/supabase-js";
 import { useState, useEffect } from "react";
 import { Database } from "./database.types";
-import { supabase } from "./App";
+import { supabase } from "./db";
 
 export function useLoading() {
   return useState<boolean>(true);
@@ -114,7 +114,7 @@ export function useTable<T extends { id: any }>(
     let query = supabase.from(tableName).select("*");
 
     initialFilters?.forEach((filter) => (query = query.filter(...filter)));
-
+    
     query.then(({ data, error }) => {
       if (error) {
         console.error(error);
@@ -176,7 +176,7 @@ export function useTable<T extends { id: any }>(
           console.log(`Unsubbed from table ${tableName} with status ${val}`)
         );
     };
-  }, [tableName]);
+  }, [tableName, initialFilters, updateFilter]);
 
   return [isLoading, error, rows];
 }
