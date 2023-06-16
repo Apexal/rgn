@@ -45,33 +45,67 @@ import {
   Wrap,
   WrapItem,
   useColorMode,
+  useToken,
 } from "@chakra-ui/react";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+} from "chart.js";
+import { Bar } from "react-chartjs-2";
 
 import { PostgrestError, User, createClient } from "@supabase/supabase-js";
 import { Database } from "./database.types";
 import formatRelative from "date-fns/formatRelative";
 
 import "./app.css";
+import { useUser, useTable, useDocument } from "./hooks";
 
 const supabaseUrl = "https://dmxnczlntlpsvwgutlml.supabase.co";
 const supabaseKey =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRteG5jemxudGxwc3Z3Z3V0bG1sIiwicm9sZSI6ImFub24iLCJpYXQiOjE2ODY4MDMyMjUsImV4cCI6MjAwMjM3OTIyNX0.RBafDsI9C_QuV4ulNJ0ziqyg7cBwinmFr3jDWBPnc_o";
-const supabase = createClient<Database>(supabaseUrl, supabaseKey!);
+export const supabase = createClient<Database>(supabaseUrl, supabaseKey!);
 
 type Activity = Database["public"]["Tables"]["activities"]["Row"];
 type Event = Database["public"]["Tables"]["events"]["Row"];
 type RSVP = Database["public"]["Tables"]["rsvps"]["Row"];
+type Player = Database["public"]["Tables"]["players"]["Row"];
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+);
+
+const options = {
+  indexAxis: "y" as const,
+  elements: {
+    bar: {
+      borderWidth: 2,
+    },
+  },
+  responsive: true,
+  plugins: {
+    legend: {
+      position: "right" as const,
+    },
+  },
+};
 
 function formatMoney(cents: number) {
   return `$${cents / 100}`;
 }
 
-function useLoading() {
-  return useState<boolean>(true);
-}
-
 type AppContext = {
   user: User | null;
+  player: Player | null;
   isUserLoading: boolean;
 
   isEventsLoading: boolean;
@@ -84,6 +118,7 @@ type AppContext = {
   activities: Activity[];
 };
 const AppContext = createContext<AppContext>({
+  player: null,
   activities: [],
   isActivitiesLoading: true,
   activitiesError: null,
@@ -94,103 +129,6 @@ const AppContext = createContext<AppContext>({
   user: null,
   isUserLoading: true,
 });
-
-function useUser(): [boolean, User | null] {
-  const [isLoading, setIsLoading] = useLoading();
-  const [user, setUser] = useState<User | null>(null);
-  useEffect(() => {
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      setIsLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  return [isLoading, user];
-}
-
-function useTable<T extends { id: any }>(
-  tableName: keyof Database["public"]["Tables"],
-  initialFilters: [string, string, string][] | undefined = undefined,
-  updateFilter: string | undefined = undefined
-): [boolean, PostgrestError | null, T[]] {
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<PostgrestError | null>(null);
-  const [rows, setRows] = useState<T[]>([]);
-
-  useEffect(() => {
-    let query = supabase.from(tableName).select("*");
-
-    initialFilters?.forEach((filter) => (query = query.filter(...filter)));
-
-    query.then(({ data, error }) => {
-      if (error) {
-        console.error(error);
-        setError(error);
-      } else {
-        setError(null);
-      }
-
-      setIsLoading(false);
-      setRows((data as unknown as T[]) ?? []);
-    });
-
-    const channel = supabase
-      .channel(`${tableName}-all-channel`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: tableName,
-          filter: updateFilter,
-        },
-        (payload) => {
-          setRows((rows) =>
-            rows.map((row) =>
-              row.id === payload.old.id ? (payload.new as T) : row
-            )
-          );
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: tableName,
-          filter: updateFilter,
-        },
-        (payload) => setRows((rows) => [...rows, payload.new as T])
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "DELETE",
-          schema: "public",
-          table: tableName,
-          filter: updateFilter,
-        },
-        (payload) =>
-          setRows((rows) => rows.filter((row) => row.id !== payload.old.id))
-      )
-      .subscribe((status) =>
-        console.log(`Subbed to table ${tableName} with status ${status}`)
-      );
-    return () => {
-      channel
-        .unsubscribe()
-        .then((val) =>
-          console.log(`Unsubbed from table ${tableName} with status ${val}`)
-        );
-    };
-  }, [tableName]);
-
-  return [isLoading, error, rows];
-}
 
 /** Bar displaying logged in user with options to sign in/sign out or edit profile. */
 function UserProfile() {
@@ -263,7 +201,9 @@ function ActivitySkeleton() {
 
 /** Displays the details of an activity along with actions to vote and favorite. */
 function ActivityCard({ activity }: { activity: Activity }) {
-  const { activeEvent } = useContext(AppContext);
+  const { player, activeEvent } = useContext(AppContext);
+
+  const canVote = !!player && !!activeEvent;
 
   const intervalID = useRef<number | null>(null);
   const [thumbnailIndex, setThumbnailIndex] = useState(0);
@@ -323,43 +263,74 @@ function ActivityCard({ activity }: { activity: Activity }) {
           </Wrap>
         </Stack>
       </CardBody>
-      <Divider />
-      <CardFooter>
-        <ButtonGroup spacing={2}>
-          {activeEvent && (
-            <Button variant={"solid"} colorScheme={"blue"}>
-              Vote to Play
-            </Button>
-          )}
-          <Button variant={activeEvent ? "ghost" : "solid"} colorScheme="blue">
-            Favorite
-          </Button>
-        </ButtonGroup>
-      </CardFooter>
+      {(canVote || player) && (
+        <>
+          <Divider />
+          <CardFooter>
+            <ButtonGroup spacing={2}>
+              {canVote && (
+                <Button variant={"solid"} colorScheme={"blue"}>
+                  Vote to Play
+                </Button>
+              )}
+              {player && (
+                <Button
+                  variant={canVote ? "ghost" : "solid"}
+                  colorScheme="blue"
+                >
+                  Favorite
+                </Button>
+              )}
+            </ButtonGroup>
+          </CardFooter>
+        </>
+      )}
     </Card>
   );
 }
 
+function randomName() {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  let name = "";
+  for (let i = 0; i < Math.random() * 10; i++) {
+    name += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  return name;
+}
+
 /** Overview of active event displaying RSVPs, votes, and actions to RSVP. */
 function ActiveEventView() {
-  const { activeEvent } = useContext(AppContext);
+  const { activeEvent, activities } = useContext(AppContext);
   const [isRsvpsLoading, rsvpsError, rsvps] = useTable<RSVP>(
     "rsvps",
     [["event_id", "eq", activeEvent!.id.toString()]],
     `event_id=eq.${activeEvent!.id}`
   );
+  const [teal500, teal600] = useToken("colors", ["teal.500", "teal.600"]);
 
   if (!activeEvent) {
     console.warn("No active event yet ActiveEventView is being rendered");
     return null;
   }
 
+  const data = {
+    labels: activities.map((act) => act.name),
+    datasets: [
+      {
+        label: "Votes",
+        data: activities.map((act) => Math.random() * 10),
+        borderColor: teal500,
+        backgroundColor: teal600,
+      },
+    ],
+  };
+
   return (
     <Box p={"6"} borderWidth={"1px"} borderRadius={"lg"} my={"10"}>
       <Flex gap={"3"}>
-        <Stack flex={"0.5"}>
-          <Heading as="h3">Countdown</Heading>
-          <Text fontSize={"3xl"}>00:00:00</Text>
+        <Stack flex={"1"}>
+          <Heading as="h3">Votes</Heading>
+          <Bar options={options} data={data} />
         </Stack>
         <Stack spacing={"3"} flex={"1"}>
           <Heading as="h3">Who's Coming?</Heading>
@@ -371,10 +342,43 @@ function ActiveEventView() {
                 </Avatar>
               </WrapItem>
             ))}
+            {[...Array(15)].map((_, i) => (
+              <WrapItem key={i}>
+                <Avatar name={randomName()}>
+                  <AvatarBadge bg="green.500" boxSize={"1.25em"} />
+                </Avatar>
+              </WrapItem>
+            ))}
           </Wrap>
         </Stack>
       </Flex>
     </Box>
+  );
+}
+
+function NoPlayerView() {
+  return (
+    <Alert
+      status="warning"
+      variant="subtle"
+      flexDirection="column"
+      alignItems="center"
+      justifyContent="center"
+      textAlign="center"
+      height="200px"
+      my={10}
+    >
+      <AlertIcon boxSize="40px" mr={0} />
+      <AlertTitle mt={4} mb={3} fontSize="3xl">
+        Pending Verification
+      </AlertTitle>
+      <AlertDescription maxWidth="sm" fontSize={"lg"}>
+        <Text>
+          Once you are verified, you'll be able to see who is attending and be
+          able to vote on activities.
+        </Text>
+      </AlertDescription>
+    </Alert>
   );
 }
 
@@ -421,13 +425,20 @@ function NoActiveEventView() {
 }
 
 function ActivityView() {
-  const { activeEvent, activitiesError, activities, isActivitiesLoading } =
-    useContext(AppContext);
+  const {
+    player,
+    activeEvent,
+    activitiesError,
+    activities,
+    isActivitiesLoading,
+  } = useContext(AppContext);
+
+  const canVote = !!player && !!activeEvent;
 
   return (
     <>
       <Heading>
-        {activeEvent ? "What do you want to play tonight?" : "Our Activities"}
+        {canVote ? "What do you want to play tonight?" : "Our Activities"}
       </Heading>
       {activitiesError && (
         <Alert status="error" my={"5"}>
@@ -474,6 +485,10 @@ function App() {
     useTable<Activity>("activities");
   const [isEventsLoading, eventsError, events] = useTable<Event>("events");
   const [isUserLoading, user] = useUser();
+  const [isPlayerLoading, playerError, player] = useDocument<Player>(
+    "players",
+    user?.id
+  );
 
   const activeEvent = useMemo<Event | null>(() => {
     const today = new Date();
@@ -488,8 +503,9 @@ function App() {
     );
   }, [events]);
 
-  const appData = useMemo(
+  const appData = useMemo<AppContext>(
     () => ({
+      player,
       isActivitiesLoading,
       activitiesError,
       activities,
@@ -501,6 +517,7 @@ function App() {
       eventsError,
     }),
     [
+      player,
       isActivitiesLoading,
       activitiesError,
       activities,
@@ -530,7 +547,15 @@ function App() {
               Rathskeller Game Night
             </Heading>
 
-            {activeEvent ? <ActiveEventView /> : <NoActiveEventView />}
+            {player ? (
+              activeEvent ? (
+                <ActiveEventView />
+              ) : (
+                <NoActiveEventView />
+              )
+            ) : (
+              <NoPlayerView />
+            )}
 
             <ActivityView />
           </main>
