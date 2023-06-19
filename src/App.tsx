@@ -493,11 +493,13 @@ function ActivityCard({ activity }: { activity: Activity }) {
           max={10}
         >
           {activityVotes.map((vote) => (
-            <Avatar
+            <Tooltip key={vote.id} label={vote.players.name ?? "Unnamed Player"}>
+              <Avatar size={"sm"}
               className="slideIn"
-              key={vote.id}
-              name={vote.player_id}
+              
+              name={vote.players.name ?? "?"}
             />
+            </Tooltip>
           ))}
         </AvatarGroup>
       </Card>
@@ -630,9 +632,11 @@ function ActiveEventView() {
               <Wrap spacing={"3"}>
                 {rsvps?.map((rsvp) => (
                   <WrapItem key={rsvp.player_id} className="slideIn from-right">
-                    <Avatar name={"Frank"}>
+                    <Tooltip label={rsvp.players.name ?? "Unnamed Player"}>
+                    <Avatar name={rsvp.players.name ?? "?"}>
                       <AvatarBadge bg="green.500" boxSize={"1.25em"} />
                     </Avatar>
+                    </Tooltip>
                   </WrapItem>
                 ))}
               </Wrap>
@@ -845,9 +849,10 @@ function App() {
   );
 
   // Fetch votes for the active event
-  const [isVotesLoading, votesError, votes] = useRows<Vote>(
+  const [isVotesLoading, votesError, votes] = useRows<AppContext["votes"][number]>(
     "votes",
-    voteFilters
+    voteFilters,
+    "*,players(name)"
   );
   // Fetch logged in user and their player profile (or null)
   const [isUserLoading, user] = useUser();
@@ -869,9 +874,10 @@ function App() {
     [activeEvent]
   );
   // Fetch active event RSVPs
-  const [isRsvpsLoading, rsvpsError, rsvps] = useRows<RSVP>(
+  const [isRsvpsLoading, rsvpsError, rsvps] = useRows<AppContext["rsvps"][number]>(
     "rsvps",
-    rsvpFilters
+    rsvpFilters,
+    "*,players(name)"
   );
 
   // Memo-ize context value to not cause infinite re-renders

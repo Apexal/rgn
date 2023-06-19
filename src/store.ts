@@ -20,11 +20,11 @@ export type AppContext = {
   
     isVotesLoading: boolean;
     votesError: PostgrestError | null;
-    votes: Vote[];
+    votes: (Vote & { players: Pick<Player, "name">})[];
   
     isRsvpsLoading: boolean;
     rsvpsError: PostgrestError | null;
-    rsvps: RSVP[];
+    rsvps: (RSVP & { players: Pick<Player, "name">})[];
   };
   export const AppContext = createContext<AppContext>({
     player: null,

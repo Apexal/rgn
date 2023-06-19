@@ -118,7 +118,7 @@ export type RowFilters = {
 export function useRows<T extends { id: any }>(
   tableName: keyof Database["public"]["Tables"],
   filters?: RowFilters,
-  select?: "string"
+  select?: string
 ): [boolean, PostgrestError | null, T[]] {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<PostgrestError | null>(null);
@@ -141,7 +141,6 @@ export function useRows<T extends { id: any }>(
       } else {
         setError(null);
       }
-
       setIsLoading(false);
       setRows((data as unknown as T[]) ?? []);
     });
@@ -172,7 +171,16 @@ export function useRows<T extends { id: any }>(
           table: tableName,
           filter: filters?.update,
         },
-        (payload) => setRows((rows) => [...rows, payload.new as T])
+        async (payload) => {
+          if (select) {
+            const { data, error } = await supabase.from(tableName).select(select).eq("id", payload.new.id).limit(1).single();
+            if (!error && data) {
+              setRows((rows) => [...rows, data as unknown as T]);
+            }
+          } else {
+            setRows((rows) => [...rows, payload.new as T])
+          }
+        }
       )
       .on(
         "postgres_changes",
