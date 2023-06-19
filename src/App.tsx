@@ -80,7 +80,7 @@ import { Bar } from "react-chartjs-2";
 import formatRelative from "date-fns/formatRelative";
 
 import { SubmitHandler, useForm } from "react-hook-form";
-import { Activity, Player, RSVP, Vote, Event, supabase } from "./db";
+import { Activity, Player, Event, supabase } from "./db";
 import { RowFilters, useRow, useRows, useUser } from "./hooks";
 import { AppContext } from "./store";
 
