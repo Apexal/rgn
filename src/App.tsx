@@ -1,12 +1,3 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
 import type { AlertDialogProps } from "@chakra-ui/react";
 import {
   Alert,
@@ -25,19 +16,30 @@ import {
   AvatarGroup,
   Box,
   Button,
-  Tooltip,
   ButtonGroup,
   Card,
   CardBody,
   CardFooter,
   Center,
+  Checkbox,
+  CheckboxGroup,
   Container,
   Divider,
   Flex,
+  FormControl,
+  FormLabel,
   HStack,
   Heading,
   Image,
+  Input,
   Link,
+  Modal,
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalOverlay,
   Popover,
   PopoverArrow,
   PopoverBody,
@@ -49,51 +51,40 @@ import {
   Stack,
   Tag,
   Text,
+  Tooltip,
   Wrap,
   WrapItem,
   useColorMode,
   useDisclosure,
   useToast,
   useToken,
-  ModalOverlay,
-  FormControl,
-  FormLabel,
-  Input,
-  Modal,
-  ModalBody,
-  ModalCloseButton,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-  Checkbox,
-  CheckboxIcon,
-  CheckboxGroup,
 } from "@chakra-ui/react";
 import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
   BarElement,
-  Title,
+  CategoryScale,
+  Chart as ChartJS,
   Tooltip as ChartTooltip,
   Legend,
+  LinearScale,
+  Title,
 } from "chart.js";
+import {
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Bar } from "react-chartjs-2";
 
-import { PostgrestError, User } from "@supabase/supabase-js";
-import { Database } from "./database.types";
 import formatRelative from "date-fns/formatRelative";
 
-import "./app.css";
-import { useUser, useRows, useRow } from "./hooks";
-import { supabase } from "./db";
 import { SubmitHandler, useForm } from "react-hook-form";
+import { Activity, Player, RSVP, Vote, Event, supabase } from "./db";
+import { RowFilters, useRow, useRows, useUser } from "./hooks";
+import { AppContext } from "./store";
 
-type Activity = Database["public"]["Tables"]["activities"]["Row"];
-type Event = Database["public"]["Tables"]["events"]["Row"];
-type RSVP = Database["public"]["Tables"]["rsvps"]["Row"];
-type Player = Database["public"]["Tables"]["players"]["Row"];
-type Vote = Database["public"]["Tables"]["votes"]["Row"];
+import "./app.css";
 
 ChartJS.register(
   CategoryScale,
@@ -122,51 +113,6 @@ const options = {
 function formatMoney(cents: number) {
   return `$${cents / 100}`;
 }
-
-type AppContext = {
-  user: User | null;
-  isUserLoading: boolean;
-  player: Player | null;
-  isPlayerLoading: boolean;
-  playerError: PostgrestError | null;
-
-  isEventsLoading: boolean;
-  eventsError: PostgrestError | null;
-  events: Event[];
-  activeEvent: Event | null;
-
-  isActivitiesLoading: boolean;
-  activitiesError: PostgrestError | null;
-  activities: Activity[];
-
-  isVotesLoading: boolean;
-  votesError: PostgrestError | null;
-  votes: Vote[];
-
-  isRsvpsLoading: boolean;
-  rsvpsError: PostgrestError | null;
-  rsvps: RSVP[];
-};
-const AppContext = createContext<AppContext>({
-  player: null,
-  isPlayerLoading: true,
-  playerError: null,
-  activities: [],
-  isActivitiesLoading: true,
-  activitiesError: null,
-  events: [],
-  activeEvent: null,
-  isEventsLoading: true,
-  eventsError: null,
-  user: null,
-  isUserLoading: true,
-  isVotesLoading: true,
-  votesError: null,
-  votes: [],
-  isRsvpsLoading: true,
-  rsvpsError: null,
-  rsvps: [],
-});
 
 type PlayerProfileInputs = {
   name: string;
@@ -548,7 +494,7 @@ function ActivityCard({ activity }: { activity: Activity }) {
         >
           {activityVotes.map((vote) => (
             <Avatar
-              className="activity-vote-avatar"
+              className="slideIn"
               key={vote.id}
               name={vote.player_id}
             />
@@ -593,7 +539,7 @@ function ActiveEventView() {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const cancelRef =
     useRef<AlertDialogProps["leastDestructiveRef"]["current"]>(null);
-  const { player, user, activeEvent, activities, votes, rsvps } =
+  const { player, user, activeEvent, activities, votes, rsvps, isRsvpsLoading } =
     useContext(AppContext);
 
   const [teal500, teal600] = useToken("colors", ["teal.500", "teal.600"]);
@@ -680,28 +626,31 @@ function ActiveEventView() {
           </Stack>
           <Stack spacing={"5"} flex={"1"}>
             <Heading as="h3">Who's Coming?</Heading>
-            <Wrap spacing={"3"}>
-              {rsvps?.map((rsvp) => (
-                <WrapItem key={rsvp.player_id}>
-                  <Avatar name={"Frank"}>
-                    <AvatarBadge bg="green.500" boxSize={"1.25em"} />
-                  </Avatar>
-                </WrapItem>
-              ))}
-            </Wrap>
-            {isUserRsvped ? (
-              <Button
-                colorScheme={"green"}
-                variant={"outline"}
-                onClick={() => toggleRSVP()}
-              >
-                I'm NOT Coming
-              </Button>
-            ) : (
-              <Button colorScheme={"green"} onClick={() => toggleRSVP()}>
-                I'm Coming
-              </Button>
-            )}
+            <Skeleton isLoaded={!isRsvpsLoading} width={"100%"} display={"flex"}>
+              <Wrap spacing={"3"}>
+                {rsvps?.map((rsvp) => (
+                  <WrapItem key={rsvp.player_id} className="slideIn from-right">
+                    <Avatar name={"Frank"}>
+                      <AvatarBadge bg="green.500" boxSize={"1.25em"} />
+                    </Avatar>
+                  </WrapItem>
+                ))}
+              </Wrap>
+            </Skeleton>
+
+              {isUserRsvped ? (
+                <Button
+                  colorScheme={"green"}
+                  variant={"outline"}
+                  onClick={() => toggleRSVP()}
+                >
+                  I'm NOT Coming
+                </Button>
+              ) : (
+                <Button colorScheme={"green"} onClick={() => toggleRSVP()}>
+                  I'm Coming
+                </Button>
+              )}
           </Stack>
         </Flex>
       </Box>
@@ -881,19 +830,24 @@ function App() {
   }, [events]);
 
   // Memo-ize filters to not cause wasteful re-renders
-  const voteFilters = useMemo(
-    () => ({
-      initial: [["event_id", "eq", activeEvent?.id.toString()]],
-      update: `event_id=eq.${activeEvent?.id}`,
-    }),
+  const voteFilters = useMemo<RowFilters>(
+    () => {
+      if (activeEvent) {
+        return {
+          initial: [["event_id", "eq", activeEvent?.id.toString()]],
+          update: `event_id=eq.${activeEvent?.id}`,
+        };
+      } else {
+        return false;
+      }
+    },
     [activeEvent]
   );
 
   // Fetch votes for the active event
   const [isVotesLoading, votesError, votes] = useRows<Vote>(
     "votes",
-    voteFilters.initial as [string, string, string][],
-    voteFilters.update
+    voteFilters
   );
   // Fetch logged in user and their player profile (or null)
   const [isUserLoading, user] = useUser();
@@ -903,18 +857,21 @@ function App() {
   );
 
   // Memo-ize filters to not cause wasteful re-renders
-  const rsvpFilters = useMemo(
-    () => ({
-      initial: [["event_id", "eq", activeEvent?.id.toString()]],
-      update: `event_id=eq.${activeEvent?.id}`,
-    }),
+  const rsvpFilters = useMemo<RowFilters>(
+    () => {
+      if (activeEvent) {
+        return {initial: [["event_id", "eq", activeEvent?.id.toString()]],
+        update: `event_id=eq.${activeEvent?.id}`,}
+      } else {
+        return false;
+      }
+    },
     [activeEvent]
   );
   // Fetch active event RSVPs
   const [isRsvpsLoading, rsvpsError, rsvps] = useRows<RSVP>(
     "rsvps",
-    rsvpFilters.initial as [string, string, string][],
-    rsvpFilters.update
+    rsvpFilters
   );
 
   // Memo-ize context value to not cause infinite re-renders

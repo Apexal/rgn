@@ -91,7 +91,7 @@ export function useRow<T extends { id: string | number }>(
         () => setRow(null)
       )
       .subscribe((status) =>
-        console.log(
+        console.debug(
           `Subbed to table ${tableName} document ${id} with status ${status}`
         )
       );
@@ -99,7 +99,7 @@ export function useRow<T extends { id: string | number }>(
       channel
         .unsubscribe()
         .then((val) =>
-          console.log(
+          console.debug(
             `Unsubbed from table ${tableName} document ${id} with status ${val}`
           )
         );
@@ -109,20 +109,30 @@ export function useRow<T extends { id: string | number }>(
   return [isLoading, error, row];
 }
 
+export type RowFilters = {
+  initial: [string, string, string][];
+  update: string;
+} | false;
+
 /** Fetch rows from a table with the given filters, and listen for realtime updates. */
 export function useRows<T extends { id: any }>(
   tableName: keyof Database["public"]["Tables"],
-  initialFilters: [string, string, string][] | undefined = undefined,
-  updateFilter: string | undefined = undefined
+  filters?: RowFilters,
+  select?: "string"
 ): [boolean, PostgrestError | null, T[]] {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<PostgrestError | null>(null);
   const [rows, setRows] = useState<T[]>([]);
 
   useEffect(() => {
-    let query = supabase.from(tableName).select("*");
+    if (filters === false) {
+      setRows([]);
+      return;
+    }
 
-    initialFilters?.forEach((filter) => (query = query.filter(...filter)));
+    let query = supabase.from(tableName).select(select ?? "*");
+
+    filters?.initial.forEach((filter) => (query = query.filter(...filter)));
     
     query.then(({ data, error }) => {
       if (error) {
@@ -144,7 +154,7 @@ export function useRows<T extends { id: any }>(
           event: "UPDATE",
           schema: "public",
           table: tableName,
-          filter: updateFilter,
+          filter: filters?.update,
         },
         (payload) => {
           setRows((rows) =>
@@ -160,7 +170,7 @@ export function useRows<T extends { id: any }>(
           event: "INSERT",
           schema: "public",
           table: tableName,
-          filter: updateFilter,
+          filter: filters?.update,
         },
         (payload) => setRows((rows) => [...rows, payload.new as T])
       )
@@ -170,22 +180,22 @@ export function useRows<T extends { id: any }>(
           event: "DELETE",
           schema: "public",
           table: tableName,
-          filter: updateFilter,
+          filter: filters?.update,
         },
         (payload) =>
           setRows((rows) => rows.filter((row) => row.id !== payload.old.id))
       )
       .subscribe((status) =>
-        console.log(`Subbed to table ${tableName} with status ${status}`)
+        console.debug(`Subbed to table ${tableName} with status ${status}`)
       );
     return () => {
       channel
         .unsubscribe()
         .then((val) =>
-          console.log(`Unsubbed from table ${tableName} with status ${val}`)
+          console.debug(`Unsubbed from table ${tableName} with status ${val}`)
         );
     };
-  }, [tableName, initialFilters, updateFilter]);
+  }, [tableName, filters]);
 
   return [isLoading, error, rows];
 }
