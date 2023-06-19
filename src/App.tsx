@@ -156,7 +156,7 @@ const AppContext = createContext<AppContext>({
 /** Bar displaying logged in user with options to sign in/sign out or edit profile. */
 function UserProfile() {
   const [isUserLoading, user] = useUser();
-  const { player } = useContext(AppContext);
+  const { player, isPlayerLoading } = useContext(AppContext);
 
   const discordIdentityData = user?.identities?.at(0)?.identity_data;
 
@@ -164,8 +164,8 @@ function UserProfile() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "discord",
       options: {
-        redirectTo: "http://localhost:5173/" // TODO: env
-      }
+        redirectTo: "http://localhost:5173/", // TODO: env
+      },
     });
     if (error) {
       alert(
@@ -187,17 +187,24 @@ function UserProfile() {
                 src={discordIdentityData?.avatar_url}
               />
             </Skeleton>
-            <Skeleton isLoaded={!isUserLoading}>
+            <Skeleton
+              isLoaded={!isUserLoading && !isPlayerLoading}
+              display={"flex"}
+              alignItems={"center"}
+              gap={3}
+            >
               <Text fontSize={"3xl"}>
                 Hi, {player?.name ?? discordIdentityData?.full_name ?? "User"}
               </Text>
-            </Skeleton>
-            <Skeleton isLoaded={!isUserLoading}>
               <Flex direction={"row"} gap={2} justifyItems={"center"}>
-                <Button size={"sm"}>Edit profile</Button>
-                <Button size={"sm"} onClick={() => supabase.auth.signOut()}>
-                  Log out
-                </Button>
+                <Tooltip label="Edit player profile">
+                  <Button size={"sm"}>✏</Button>
+                </Tooltip>
+                <Tooltip label="Log out">
+                  <Button size={"sm"} onClick={() => supabase.auth.signOut()}>
+                    🚪
+                  </Button>
+                </Tooltip>
               </Flex>
             </Skeleton>
           </HStack>
@@ -403,7 +410,7 @@ function ActivityCard({ activity }: { activity: Activity }) {
                       colorScheme={"blue"}
                       onClick={() => toggleVote()}
                     >
-                      Vote to Play
+                      {isUserRsvped ? "Vote to Play" : "RSVP & Vote"}
                     </Button>
                   ))}
                 {player && (
@@ -469,7 +476,9 @@ function ActivityCard({ activity }: { activity: Activity }) {
 /** Overview of active event displaying RSVPs, votes, and actions to RSVP. */
 function ActiveEventView() {
   const toast = useToast();
-
+  const { isOpen, onOpen, onClose } = useDisclosure();
+  const cancelRef =
+    useRef<AlertDialogProps["leastDestructiveRef"]["current"]>(null);
   const { player, user, activeEvent, activities, votes, rsvps } =
     useContext(AppContext);
 
@@ -499,6 +508,11 @@ function ActiveEventView() {
 
   const toggleRSVP = async () => {
     if (isUserRsvped) {
+      // Ensure no votes
+      if (votes.find((vote) => vote.player_id === player.id)) {
+        return onOpen();
+      }
+
       const { error } = await supabase
         .from("rsvps")
         .delete()
@@ -543,42 +557,71 @@ function ActiveEventView() {
   };
 
   return (
-    <Box p={"6"} borderWidth={"1px"} borderRadius={"lg"} my={"10"}>
-      <Flex gap={"3"}>
-        <Stack flex={"1"}>
-          <Heading as="h3">Votes</Heading>
-          <Bar options={options} data={data} />
-        </Stack>
-        <Stack spacing={"5"} flex={"1"}>
-          <Heading as="h3">Who's Coming?</Heading>
-          <Wrap spacing={"3"}>
-            {rsvps?.map((rsvp) => (
-              <WrapItem key={rsvp.player_id}>
-                <Avatar name={"Frank"}>
-                  <AvatarBadge bg="green.500" boxSize={"1.25em"} />
-                </Avatar>
-              </WrapItem>
-            ))}
-          </Wrap>
-          {isUserRsvped ? (
-            <Button
-              colorScheme={"green"}
-              variant={"outline"}
-              onClick={() => toggleRSVP()}
-            >
-              I'm NOT Coming
-            </Button>
-          ) : (
-            <Button colorScheme={"green"} onClick={() => toggleRSVP()}>
-              I'm Coming
-            </Button>
-          )}
-        </Stack>
-      </Flex>
-    </Box>
+    <>
+      <Box p={"6"} borderWidth={"1px"} borderRadius={"lg"} my={"10"}>
+        <Flex gap={"3"} direction={{ base: "column", md: "row" }}>
+          <Stack flex={"1"}>
+            <Heading as="h3">Votes</Heading>
+            <Bar options={options} data={data} />
+          </Stack>
+          <Stack spacing={"5"} flex={"1"}>
+            <Heading as="h3">Who's Coming?</Heading>
+            <Wrap spacing={"3"}>
+              {rsvps?.map((rsvp) => (
+                <WrapItem key={rsvp.player_id}>
+                  <Avatar name={"Frank"}>
+                    <AvatarBadge bg="green.500" boxSize={"1.25em"} />
+                  </Avatar>
+                </WrapItem>
+              ))}
+            </Wrap>
+            {isUserRsvped ? (
+              <Button
+                colorScheme={"green"}
+                variant={"outline"}
+                onClick={() => toggleRSVP()}
+              >
+                I'm NOT Coming
+              </Button>
+            ) : (
+              <Button colorScheme={"green"} onClick={() => toggleRSVP()}>
+                I'm Coming
+              </Button>
+            )}
+          </Stack>
+        </Flex>
+      </Box>
+
+      <AlertDialog
+        isOpen={isOpen}
+        leastDestructiveRef={cancelRef}
+        onClose={onClose}
+        isCentered
+      >
+        <AlertDialogOverlay>
+          <AlertDialogContent>
+            <AlertDialogHeader fontSize="lg" fontWeight="bold">
+              Getting Cold Feet?
+            </AlertDialogHeader>
+
+            <AlertDialogBody>
+              You've already voted on activities for tonight. Remove those votes
+              first if you want to take back your RSVP.
+            </AlertDialogBody>
+
+            <AlertDialogFooter>
+              <Button colorScheme="red" onClick={onClose}>
+                Ok
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialogOverlay>
+      </AlertDialog>
+    </>
   );
 }
 
+/** Alert with warning explaining that the user must be manually verified to continue. */
 function NoPlayerView() {
   return (
     <Alert
@@ -588,17 +631,17 @@ function NoPlayerView() {
       alignItems="center"
       justifyContent="center"
       textAlign="center"
-      height="200px"
+      py={10}
       my={10}
     >
       <AlertIcon boxSize="40px" mr={0} />
       <AlertTitle mt={4} mb={3} fontSize="3xl">
         Pending Verification
       </AlertTitle>
-      <AlertDescription maxWidth="sm" fontSize={"lg"}>
+      <AlertDescription maxWidth="sm" fontSize={"md"}>
         <Text>
-          Once you are verified, you'll be able to see who is attending and be
-          able to vote on activities.
+          Frank will now manually verify your account. Once verified, you can
+          RSVP for game nights and vote on the activities below.
         </Text>
       </AlertDescription>
     </Alert>
@@ -708,7 +751,7 @@ function App() {
   const [isActivitiesLoading, activitiesError, activities] =
     useRows<Activity>("activities");
   const [isEventsLoading, eventsError, events] = useRows<Event>("events");
-  
+
   // Find today's event (or null)
   const activeEvent = useMemo<Event | null>(() => {
     const today = new Date();
@@ -759,7 +802,7 @@ function App() {
     rsvpFilters.initial as [string, string, string][],
     rsvpFilters.update
   );
-  
+
   // Memo-ize context value to not cause infinite re-renders
   const appData = useMemo<AppContext>(
     () => ({
@@ -810,7 +853,9 @@ function App() {
         <Flex minWidth={"max-content"} alignItems={"center"} gap={2} mb={10}>
           <UserProfile />
           <Spacer />
-          <Tooltip label={`Switch to ${colorMode === "light" ? "dark" : "light"} mode`}>
+          <Tooltip
+            label={`Switch to ${colorMode === "light" ? "dark" : "light"} mode`}
+          >
             <Button size={"sm"} onClick={toggleColorMode}>
               {colorMode === "light" ? "🌚" : "🌞"}
             </Button>
