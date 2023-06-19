@@ -111,16 +111,19 @@ export interface Database {
           created_at: string | null
           id: string
           name: string | null
+          platforms: string[]
         }
         Insert: {
           created_at?: string | null
           id: string
           name?: string | null
+          platforms?: string[]
         }
         Update: {
           created_at?: string | null
           id?: string
           name?: string | null
+          platforms?: string[]
         }
         Relationships: [
           {

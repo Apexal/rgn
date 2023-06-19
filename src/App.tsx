@@ -2,6 +2,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -54,6 +55,19 @@ import {
   useDisclosure,
   useToast,
   useToken,
+  ModalOverlay,
+  FormControl,
+  FormLabel,
+  Input,
+  Modal,
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  Checkbox,
+  CheckboxIcon,
+  CheckboxGroup,
 } from "@chakra-ui/react";
 import {
   Chart as ChartJS,
@@ -73,6 +87,7 @@ import formatRelative from "date-fns/formatRelative";
 import "./app.css";
 import { useUser, useRows, useRow } from "./hooks";
 import { supabase } from "./db";
+import { SubmitHandler, useForm } from "react-hook-form";
 
 type Activity = Database["public"]["Tables"]["activities"]["Row"];
 type Event = Database["public"]["Tables"]["events"]["Row"];
@@ -153,10 +168,19 @@ const AppContext = createContext<AppContext>({
   rsvps: [],
 });
 
+type PlayerProfileInputs = {
+  name: string;
+  windows: boolean;
+  mac: boolean;
+  mobile: boolean;
+};
 /** Bar displaying logged in user with options to sign in/sign out or edit profile. */
 function UserProfile() {
+  const { register, handleSubmit } = useForm<PlayerProfileInputs>();
+  const toast = useToast();
   const [isUserLoading, user] = useUser();
   const { player, isPlayerLoading } = useContext(AppContext);
+  const { isOpen, onOpen, onClose } = useDisclosure();
 
   const discordIdentityData = user?.identities?.at(0)?.identity_data;
 
@@ -174,42 +198,132 @@ function UserProfile() {
     }
   }
 
+  const onSubmitProfileForm: SubmitHandler<PlayerProfileInputs> = async (
+    data
+  ) => {
+    if (!player) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("players")
+      .update({
+        name: data.name,
+        platforms: (["windows", "mac", "mobile"] as const).filter(
+          (platform) => data[platform]
+        ),
+      })
+      .eq("id", player.id);
+
+    if (error) {
+      console.error(error);
+      toast({
+        description:
+          "There was an error updating your profile. Yell at Frank to fix this!",
+        status: "error",
+      });
+      return;
+    } else {
+      toast({
+        description: "Your player profile has been updated.",
+        status: "success",
+      });
+      onClose();
+    }
+  };
+
   if (user) {
     return (
-      <nav>
-        <Center>
-          <HStack spacing={3}>
-            <Skeleton isLoaded={!isUserLoading}>
-              <Avatar
-                bgColor={"gray"}
-                size={"sm"}
-                name={discordIdentityData?.full_name}
-                src={discordIdentityData?.avatar_url}
-              />
-            </Skeleton>
-            <Skeleton
-              isLoaded={!isUserLoading && !isPlayerLoading}
-              display={"flex"}
-              alignItems={"center"}
-              gap={3}
-            >
-              <Text fontSize={"3xl"}>
-                Hi, {player?.name ?? discordIdentityData?.full_name ?? "User"}
-              </Text>
-              <Flex direction={"row"} gap={2} justifyItems={"center"}>
-                <Tooltip label="Edit player profile">
-                  <Button size={"sm"}>✏</Button>
-                </Tooltip>
-                <Tooltip label="Log out">
-                  <Button size={"sm"} onClick={() => supabase.auth.signOut()}>
-                    🚪
-                  </Button>
-                </Tooltip>
-              </Flex>
-            </Skeleton>
-          </HStack>
-        </Center>
-      </nav>
+      <>
+        <nav>
+          <Center>
+            <HStack spacing={3}>
+              <Skeleton isLoaded={!isUserLoading}>
+                <Avatar
+                  bgColor={"gray"}
+                  size={"sm"}
+                  name={discordIdentityData?.full_name}
+                  src={discordIdentityData?.avatar_url}
+                />
+              </Skeleton>
+              <Skeleton
+                isLoaded={!isUserLoading && !isPlayerLoading}
+                display={"flex"}
+                alignItems={"center"}
+                gap={3}
+              >
+                <Text fontSize={"3xl"}>
+                  Hi, {player?.name ?? discordIdentityData?.full_name ?? "User"}
+                </Text>
+                <Flex direction={"row"} gap={2} justifyItems={"center"}>
+                  <Tooltip label="Edit player profile">
+                    <Button size={"sm"} onClick={() => onOpen()}>
+                      ✏
+                    </Button>
+                  </Tooltip>
+                  <Tooltip label="Log out">
+                    <Button size={"sm"} onClick={() => supabase.auth.signOut()}>
+                      🚪
+                    </Button>
+                  </Tooltip>
+                </Flex>
+              </Skeleton>
+            </HStack>
+          </Center>
+        </nav>
+        <Modal isOpen={isOpen} onClose={onClose}>
+          <ModalOverlay />
+          <ModalContent>
+            <ModalHeader>Edit your player profile</ModalHeader>
+            <ModalCloseButton />
+            <ModalBody pb={6}>
+              <form
+                id="profile-form"
+                onSubmit={handleSubmit(onSubmitProfileForm)}
+              >
+                <FormControl mb={"5"}>
+                  <FormLabel>Name</FormLabel>
+                  <Input
+                    {...register("name", {
+                      required: true,
+                      maxLength: 30,
+                      min: 2,
+                    })}
+                    defaultValue={player?.name ?? ""}
+                  />
+                </FormControl>
+
+                <FormLabel>What devices can you play on?</FormLabel>
+                <CheckboxGroup defaultValue={player?.platforms ?? []}>
+                  <Stack spacing={[1, 5]} direction={["column", "row"]}>
+                    <Checkbox {...register("windows")} value="windows">
+                      Windows
+                    </Checkbox>
+                    <Checkbox {...register("mac")} value="mac">
+                      Mac
+                    </Checkbox>
+                    <Checkbox {...register("mobile")} value="mobile">
+                      Mobile
+                    </Checkbox>
+                  </Stack>
+                </CheckboxGroup>
+              </form>
+            </ModalBody>
+
+            <ModalFooter>
+              <Button
+                colorScheme="blue"
+                mr={3}
+                form="profile-form"
+                type="submit"
+              >
+                Save
+              </Button>
+              <Button onClick={onClose}>Cancel</Button>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
+      </>
     );
   } else {
     return (
@@ -868,15 +982,17 @@ function App() {
               Rathskeller Game Night
             </Heading>
 
-            {player ? (
-              activeEvent ? (
-                <ActiveEventView />
+            <Skeleton isLoaded={!isPlayerLoading && !isEventsLoading}>
+              {player ? (
+                activeEvent ? (
+                  <ActiveEventView />
+                ) : (
+                  <NoActiveEventView />
+                )
               ) : (
-                <NoActiveEventView />
-              )
-            ) : (
-              <NoPlayerView />
-            )}
+                <NoPlayerView />
+              )}
+            </Skeleton>
 
             <ActivityView />
           </main>
