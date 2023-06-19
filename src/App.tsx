@@ -30,6 +30,7 @@ import {
   FormLabel,
   HStack,
   Heading,
+  Icon,
   Image,
   Input,
   Link,
@@ -68,13 +69,7 @@ import {
   LinearScale,
   Title,
 } from "chart.js";
-import {
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Bar } from "react-chartjs-2";
 
 import formatRelative from "date-fns/formatRelative";
@@ -85,6 +80,10 @@ import { RowFilters, useRow, useRows, useUser } from "./hooks";
 import { AppContext } from "./store";
 
 import "./app.css";
+
+import windowsIcon from "./assets/windows.png";
+import macOSIcon from "./assets/mac-os-logo.png";
+import cellPhoneIcon from "./assets/cell-phone.png";
 
 ChartJS.register(
   CategoryScale,
@@ -148,7 +147,7 @@ function UserProfile() {
     data
   ) => {
     if (!player) {
-      return;
+      return onClose();
     }
 
     const { error } = await supabase
@@ -202,11 +201,13 @@ function UserProfile() {
                   Hi, {player?.name ?? discordIdentityData?.full_name ?? "User"}
                 </Text>
                 <Flex direction={"row"} gap={2} justifyItems={"center"}>
-                  <Tooltip label="Edit player profile">
-                    <Button size={"sm"} onClick={() => onOpen()}>
-                      ✏
-                    </Button>
-                  </Tooltip>
+                  {player && (
+                    <Tooltip label="Edit player profile">
+                      <Button size={"sm"} onClick={() => onOpen()}>
+                        ✏
+                      </Button>
+                    </Tooltip>
+                  )}
                   <Tooltip label="Log out">
                     <Button size={"sm"} onClick={() => supabase.auth.signOut()}>
                       🚪
@@ -448,6 +449,17 @@ function ActivityCard({ activity }: { activity: Activity }) {
                 </WrapItem>
               ))}
             </Wrap>
+            <HStack gap={1} mt={3}>
+              {activity.platforms.includes("windows") && (
+                <img src={windowsIcon} height={24} width={24} />
+              )}
+              {activity.platforms.includes("mac") && (
+                <img src={macOSIcon} height={24} width={24} />
+              )}
+              {activity.platforms.includes("mobile") && (
+                <img src={cellPhoneIcon} height={24} width={24} />
+              )}
+            </HStack>
           </Stack>
         </CardBody>
         {(canVote || player) && (
@@ -493,12 +505,15 @@ function ActivityCard({ activity }: { activity: Activity }) {
           max={10}
         >
           {activityVotes.map((vote) => (
-            <Tooltip key={vote.id} label={vote.players.name ?? "Unnamed Player"}>
-              <Avatar size={"sm"}
-              className="slideIn"
-              
-              name={vote.players.name ?? "?"}
-            />
+            <Tooltip
+              key={vote.id}
+              label={vote.players.name ?? "Unnamed Player"}
+            >
+              <Avatar
+                size={"sm"}
+                className="slideIn"
+                name={vote.players.name ?? "?"}
+              />
             </Tooltip>
           ))}
         </AvatarGroup>
@@ -541,8 +556,15 @@ function ActiveEventView() {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const cancelRef =
     useRef<AlertDialogProps["leastDestructiveRef"]["current"]>(null);
-  const { player, user, activeEvent, activities, votes, rsvps, isRsvpsLoading } =
-    useContext(AppContext);
+  const {
+    player,
+    user,
+    activeEvent,
+    activities,
+    votes,
+    rsvps,
+    isRsvpsLoading,
+  } = useContext(AppContext);
 
   const [teal500, teal600] = useToken("colors", ["teal.500", "teal.600"]);
 
@@ -628,33 +650,37 @@ function ActiveEventView() {
           </Stack>
           <Stack spacing={"5"} flex={"1"}>
             <Heading as="h3">Who's Coming?</Heading>
-            <Skeleton isLoaded={!isRsvpsLoading} width={"100%"} display={"flex"}>
+            <Skeleton
+              isLoaded={!isRsvpsLoading}
+              width={"100%"}
+              display={"flex"}
+            >
               <Wrap spacing={"3"}>
                 {rsvps?.map((rsvp) => (
                   <WrapItem key={rsvp.player_id} className="slideIn from-right">
                     <Tooltip label={rsvp.players.name ?? "Unnamed Player"}>
-                    <Avatar name={rsvp.players.name ?? "?"}>
-                      <AvatarBadge bg="green.500" boxSize={"1.25em"} />
-                    </Avatar>
+                      <Avatar name={rsvp.players.name ?? "?"}>
+                        <AvatarBadge bg="green.500" boxSize={"1.25em"} />
+                      </Avatar>
                     </Tooltip>
                   </WrapItem>
                 ))}
               </Wrap>
             </Skeleton>
 
-              {isUserRsvped ? (
-                <Button
-                  colorScheme={"green"}
-                  variant={"outline"}
-                  onClick={() => toggleRSVP()}
-                >
-                  I'm NOT Coming
-                </Button>
-              ) : (
-                <Button colorScheme={"green"} onClick={() => toggleRSVP()}>
-                  I'm Coming
-                </Button>
-              )}
+            {isUserRsvped ? (
+              <Button
+                colorScheme={"green"}
+                variant={"outline"}
+                onClick={() => toggleRSVP()}
+              >
+                I'm NOT Coming
+              </Button>
+            ) : (
+              <Button colorScheme={"green"} onClick={() => toggleRSVP()}>
+                I'm Coming
+              </Button>
+            )}
           </Stack>
         </Flex>
       </Box>
@@ -787,7 +813,7 @@ function ActivityView() {
             ))}
       </SimpleGrid>
 
-      <Popover placement="left-start">
+      <Popover placement="auto">
         <PopoverTrigger>
           <Button>Missing something?</Button>
         </PopoverTrigger>
@@ -834,26 +860,21 @@ function App() {
   }, [events]);
 
   // Memo-ize filters to not cause wasteful re-renders
-  const voteFilters = useMemo<RowFilters>(
-    () => {
-      if (activeEvent) {
-        return {
-          initial: [["event_id", "eq", activeEvent?.id.toString()]],
-          update: `event_id=eq.${activeEvent?.id}`,
-        };
-      } else {
-        return false;
-      }
-    },
-    [activeEvent]
-  );
+  const voteFilters = useMemo<RowFilters>(() => {
+    if (activeEvent) {
+      return {
+        initial: [["event_id", "eq", activeEvent?.id.toString()]],
+        update: `event_id=eq.${activeEvent?.id}`,
+      };
+    } else {
+      return false;
+    }
+  }, [activeEvent]);
 
   // Fetch votes for the active event
-  const [isVotesLoading, votesError, votes] = useRows<AppContext["votes"][number]>(
-    "votes",
-    voteFilters,
-    "*,players(name)"
-  );
+  const [isVotesLoading, votesError, votes] = useRows<
+    AppContext["votes"][number]
+  >("votes", voteFilters, "*,players(name)");
   // Fetch logged in user and their player profile (or null)
   const [isUserLoading, user] = useUser();
   const [isPlayerLoading, playerError, player] = useRow<Player>(
@@ -862,23 +883,20 @@ function App() {
   );
 
   // Memo-ize filters to not cause wasteful re-renders
-  const rsvpFilters = useMemo<RowFilters>(
-    () => {
-      if (activeEvent) {
-        return {initial: [["event_id", "eq", activeEvent?.id.toString()]],
-        update: `event_id=eq.${activeEvent?.id}`,}
-      } else {
-        return false;
-      }
-    },
-    [activeEvent]
-  );
+  const rsvpFilters = useMemo<RowFilters>(() => {
+    if (activeEvent) {
+      return {
+        initial: [["event_id", "eq", activeEvent?.id.toString()]],
+        update: `event_id=eq.${activeEvent?.id}`,
+      };
+    } else {
+      return false;
+    }
+  }, [activeEvent]);
   // Fetch active event RSVPs
-  const [isRsvpsLoading, rsvpsError, rsvps] = useRows<AppContext["rsvps"][number]>(
-    "rsvps",
-    rsvpFilters,
-    "*,players(name)"
-  );
+  const [isRsvpsLoading, rsvpsError, rsvps] = useRows<
+    AppContext["rsvps"][number]
+  >("rsvps", rsvpFilters, "*,players(name)");
 
   // Memo-ize context value to not cause infinite re-renders
   const appData = useMemo<AppContext>(
