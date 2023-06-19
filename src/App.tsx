@@ -134,7 +134,7 @@ function UserProfile() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "discord",
       options: {
-        redirectTo: "http://localhost:5173/", // TODO: env
+        redirectTo: import.meta.env.DEV ? "http://localhost:5173/" : undefined,
       },
     });
     if (error) {
