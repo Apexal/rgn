@@ -24,6 +24,7 @@ import {
   AvatarGroup,
   Box,
   Button,
+  Tooltip,
   ButtonGroup,
   Card,
   CardBody,
@@ -60,7 +61,7 @@ import {
   LinearScale,
   BarElement,
   Title,
-  Tooltip,
+  Tooltip as ChartTooltip,
   Legend,
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
@@ -70,7 +71,7 @@ import { Database } from "./database.types";
 import formatRelative from "date-fns/formatRelative";
 
 import "./app.css";
-import { useUser, useTable, useDocument } from "./hooks";
+import { useUser, useRows, useRow } from "./hooks";
 import { supabase } from "./db";
 
 type Activity = Database["public"]["Tables"]["activities"]["Row"];
@@ -84,7 +85,7 @@ ChartJS.register(
   LinearScale,
   BarElement,
   Title,
-  Tooltip,
+  ChartTooltip,
   Legend
 );
 
@@ -162,6 +163,9 @@ function UserProfile() {
   async function signInWithDiscord() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "discord",
+      options: {
+        redirectTo: "http://localhost:5173/" // TODO: env
+      }
     });
     if (error) {
       alert(
@@ -665,7 +669,7 @@ function ActivityView() {
           and try again later!
         </Alert>
       )}
-      <SimpleGrid columns={3} spacing={10} my={10}>
+      <SimpleGrid columns={[1, 2, 3]} spacing={10} my={10}>
         {isActivitiesLoading && !activities
           ? [1, 2, 3].map((_, index) => <ActivitySkeleton key={index} />)
           : activities!.map((activity) => (
@@ -700,9 +704,12 @@ function ActivityView() {
 function App() {
   const { colorMode, toggleColorMode } = useColorMode();
 
+  // Fetch activities and events and listen for updates
   const [isActivitiesLoading, activitiesError, activities] =
-    useTable<Activity>("activities");
-  const [isEventsLoading, eventsError, events] = useTable<Event>("events");
+    useRows<Activity>("activities");
+  const [isEventsLoading, eventsError, events] = useRows<Event>("events");
+  
+  // Find today's event (or null)
   const activeEvent = useMemo<Event | null>(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -716,6 +723,7 @@ function App() {
     );
   }, [events]);
 
+  // Memo-ize filters to not cause wasteful re-renders
   const voteFilters = useMemo(
     () => ({
       initial: [["event_id", "eq", activeEvent?.id.toString()]],
@@ -724,17 +732,20 @@ function App() {
     [activeEvent]
   );
 
-  const [isVotesLoading, votesError, votes] = useTable<Vote>(
+  // Fetch votes for the active event
+  const [isVotesLoading, votesError, votes] = useRows<Vote>(
     "votes",
     voteFilters.initial as [string, string, string][],
     voteFilters.update
   );
+  // Fetch logged in user and their player profile (or null)
   const [isUserLoading, user] = useUser();
-  const [isPlayerLoading, playerError, player] = useDocument<Player>(
+  const [isPlayerLoading, playerError, player] = useRow<Player>(
     "players",
     user?.id
   );
 
+  // Memo-ize filters to not cause wasteful re-renders
   const rsvpFilters = useMemo(
     () => ({
       initial: [["event_id", "eq", activeEvent?.id.toString()]],
@@ -742,12 +753,14 @@ function App() {
     }),
     [activeEvent]
   );
-  const [isRsvpsLoading, rsvpsError, rsvps] = useTable<RSVP>(
+  // Fetch active event RSVPs
+  const [isRsvpsLoading, rsvpsError, rsvps] = useRows<RSVP>(
     "rsvps",
     rsvpFilters.initial as [string, string, string][],
     rsvpFilters.update
   );
-
+  
+  // Memo-ize context value to not cause infinite re-renders
   const appData = useMemo<AppContext>(
     () => ({
       player,
@@ -797,14 +810,16 @@ function App() {
         <Flex minWidth={"max-content"} alignItems={"center"} gap={2} mb={10}>
           <UserProfile />
           <Spacer />
-          <Button size={"sm"} onClick={toggleColorMode}>
-            Toggle {colorMode === "light" ? "Dark" : "Light"}
-          </Button>
+          <Tooltip label={`Switch to ${colorMode === "light" ? "dark" : "light"} mode`}>
+            <Button size={"sm"} onClick={toggleColorMode}>
+              {colorMode === "light" ? "🌚" : "🌞"}
+            </Button>
+          </Tooltip>
         </Flex>
 
         {!isUserLoading && user ? (
           <main>
-            <Heading as="h1" size="4xl">
+            <Heading as="h1" size={["3xl", null, "4xl"]}>
               Rathskeller Game Night
             </Heading>
 

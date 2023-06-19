@@ -24,7 +24,8 @@ export function useUser(): [boolean, User | null] {
   return [isLoading, user];
 }
 
-export function useDocument<T extends { id: string | number }>(
+/** Fetch a single row from a table with the given ID and listen for updates. */
+export function useRow<T extends { id: string | number }>(
   tableName: keyof Database["public"]["Tables"],
   id: string | number | undefined
 ): [boolean, PostgrestError | null, T | null] {
@@ -108,7 +109,8 @@ export function useDocument<T extends { id: string | number }>(
   return [isLoading, error, row];
 }
 
-export function useTable<T extends { id: any }>(
+/** Fetch rows from a table with the given filters, and listen for realtime updates. */
+export function useRows<T extends { id: any }>(
   tableName: keyof Database["public"]["Tables"],
   initialFilters: [string, string, string][] | undefined = undefined,
   updateFilter: string | undefined = undefined
