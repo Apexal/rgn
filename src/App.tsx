@@ -348,12 +348,6 @@ function ActivityCard({ activity }: { activity: Activity }) {
           "There was an error RSVPing you. Yell at Frank to fix this!",
         status: "error",
       });
-    } else {
-      toast({
-        description:
-          "You RSVPed for this game night. You better show up on time.",
-        status: "success",
-      });
     }
   };
 
@@ -375,11 +369,6 @@ function ActivityCard({ activity }: { activity: Activity }) {
           description:
             "There was an error removing your vote. Yell at Frank to fix this!",
           status: "error",
-        });
-      } else {
-        toast({
-          description: "Removed your vote!",
-          status: "info",
         });
       }
     } else {
@@ -643,10 +632,11 @@ function ActiveEventView() {
           status: "error",
         });
       } else {
-        toast({
-          description:
-            "You've RSVPed for game night tonight! You better show up.",
-          status: "success",
+        // @ts-ignore
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          origin: { y: 1 },
         });
       }
     }
@@ -667,6 +657,7 @@ function ActiveEventView() {
               width={"100%"}
               display={"flex"}
             >
+              {rsvps.length === 0 && <Text>Nobody yet. Be the first to RSVP!</Text>}
               <Wrap spacing={"3"}>
                 {rsvps?.map((rsvp) => (
                   <WrapItem key={rsvp.player_id} className="slideIn from-right">
@@ -689,7 +680,7 @@ function ActiveEventView() {
                 I'm NOT Coming
               </Button>
             ) : (
-              <Button colorScheme={"green"} onClick={() => toggleRSVP()}>
+              <Button colorScheme={"green"} onClick={() => toggleRSVP()} id="rsvp-button">
                 I'm Coming
               </Button>
             )}
