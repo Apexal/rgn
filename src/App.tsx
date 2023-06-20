@@ -30,7 +30,6 @@ import {
   FormLabel,
   HStack,
   Heading,
-  Icon,
   Image,
   Input,
   Link,
@@ -49,6 +48,7 @@ import {
   SimpleGrid,
   Skeleton,
   Spacer,
+  Spinner,
   Stack,
   Tag,
   Text,
@@ -82,8 +82,9 @@ import { AppContext } from "./store";
 import "./app.css";
 
 import windowsIcon from "./assets/windows.png";
-import macOSIcon from "./assets/mac-os-logo.png";
-import cellPhoneIcon from "./assets/cell-phone.png";
+import macOSIcon from "./assets/macos.png";
+import cellPhoneIcon from "./assets/mobile.png";
+import { EditIcon, InfoOutlineIcon, MoonIcon, SunIcon, TriangleUpIcon } from "@chakra-ui/icons";
 
 ChartJS.register(
   CategoryScale,
@@ -113,6 +114,20 @@ function formatMoney(cents: number) {
   return `$${cents / 100}`;
 }
 
+const signInWithDiscord = async () => {
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "discord",
+    options: {
+      redirectTo: import.meta.env.DEV ? "http://localhost:5173/" : undefined,
+    },
+  });
+  if (error) {
+    alert(
+      "There was an error signing in with Discord... Please try again later."
+    );
+  }
+};
+
 type PlayerProfileInputs = {
   name: string;
   windows: boolean;
@@ -128,20 +143,6 @@ function UserProfile() {
   const { isOpen, onOpen, onClose } = useDisclosure();
 
   const discordIdentityData = user?.identities?.at(0)?.identity_data;
-
-  async function signInWithDiscord() {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "discord",
-      options: {
-        redirectTo: import.meta.env.DEV ? "http://localhost:5173/" : undefined,
-      },
-    });
-    if (error) {
-      alert(
-        "There was an error signing in with Discord... Please try again later."
-      );
-    }
-  }
 
   const onSubmitProfileForm: SubmitHandler<PlayerProfileInputs> = async (
     data
@@ -204,7 +205,7 @@ function UserProfile() {
                   {player && (
                     <Tooltip label="Edit player profile">
                       <Button size={"sm"} onClick={() => onOpen()}>
-                        ✏
+                        <EditIcon />
                       </Button>
                     </Tooltip>
                   )}
@@ -420,7 +421,7 @@ function ActivityCard({ activity }: { activity: Activity }) {
         onMouseLeave={() => stopThumbnailLoop()}
         className="activity-card"
       >
-        <CardBody>
+        <CardBody display={"flex"} flexDirection={"column"}>
           <Image
             borderRadius={"lg"}
             height="150px"
@@ -429,19 +430,9 @@ function ActivityCard({ activity }: { activity: Activity }) {
             alt={activity.name}
             src={activity.thumbnail_urls[thumbnailIndex]}
           />
-          <Stack mt={6} spacing={3}>
+          <Flex mt={6} gap={3} direction={"column"} flex="1">
             <Heading size="lg">{activity.name}</Heading>
             <Text>{activity.summary}</Text>
-            {activity.price ? (
-              <Text color="blue.600" fontSize="xl">
-                <strong>{formatMoney(activity.price)}</strong>{" "}
-                {activity.price_type === "subscription" && "subscription"}
-              </Text>
-            ) : (
-              <Text color="blue.600" fontSize="xl">
-                <strong>Free!</strong>
-              </Text>
-            )}
             <Wrap>
               {activity.tags.map((tag) => (
                 <WrapItem key={tag}>
@@ -449,24 +440,44 @@ function ActivityCard({ activity }: { activity: Activity }) {
                 </WrapItem>
               ))}
             </Wrap>
-            <HStack gap={1} mt={3}>
+            <Spacer />
+            <Flex gap={2} alignItems={"center"}>
+              {activity.price ? (
+                <Text color="blue.600" fontSize="xl">
+                  <strong>{formatMoney(activity.price)}</strong>{" "}
+                  {activity.price_type === "subscription" && "subscription"}
+                </Text>
+              ) : (
+                <Text color="blue.600" fontSize="xl">
+                  <strong>Free!</strong>
+                </Text>
+              )}
+              <Spacer />
               {activity.platforms.includes("windows") && (
-                <img src={windowsIcon} height={24} width={24} />
+                <Image
+                  src={windowsIcon}
+                  boxSize={"20px"}
+                  objectFit={"contain"}
+                />
               )}
               {activity.platforms.includes("mac") && (
-                <img src={macOSIcon} height={24} width={24} />
+                <Image src={macOSIcon} boxSize={"20px"} objectFit={"contain"} />
               )}
               {activity.platforms.includes("mobile") && (
-                <img src={cellPhoneIcon} height={24} width={24} />
+                <Image
+                  src={cellPhoneIcon}
+                  boxSize={"20px"}
+                  objectFit={"contain"}
+                />
               )}
-            </HStack>
-          </Stack>
+            </Flex>
+          </Flex>
         </CardBody>
         {(canVote || player) && (
           <>
             <Divider />
             <CardFooter>
-              <ButtonGroup spacing={2}>
+              <ButtonGroup spacing={2} justifyContent={"space-between"} flex={"1"}>
                 {canVote &&
                   (isVotedForByPlayer ? (
                     <Button
@@ -481,16 +492,17 @@ function ActivityCard({ activity }: { activity: Activity }) {
                       variant={"solid"}
                       colorScheme={"blue"}
                       onClick={() => toggleVote()}
+                      leftIcon={<TriangleUpIcon />}
                     >
                       {isUserRsvped ? "Vote to Play" : "RSVP & Vote"}
                     </Button>
                   ))}
                 {player && (
                   <Button
-                    variant={canVote ? "ghost" : "solid"}
+                    variant="ghost"
                     colorScheme="blue"
                   >
-                    Favorite
+                    <InfoOutlineIcon />
                   </Button>
                 )}
               </ButtonGroup>
@@ -837,6 +849,26 @@ function ActivityView() {
   );
 }
 
+function LoggedOutView() {
+  return (
+    <Container maxW="container.lg">
+      <Stack p={"10"} spacing={5} borderWidth={1} borderRadius={"lg"}>
+        <Heading
+          as="h1"
+          textAlign={"center"}
+          fontSize={{ base: "5xl", md: "7xl" }}
+        >
+          Rathskeller Game Night
+        </Heading>
+
+        <Button size={"lg"} onClick={() => signInWithDiscord()}>
+          Login with Discord
+        </Button>
+      </Stack>
+    </Container>
+  );
+}
+
 function App() {
   const { colorMode, toggleColorMode } = useColorMode();
 
@@ -952,12 +984,17 @@ function App() {
             label={`Switch to ${colorMode === "light" ? "dark" : "light"} mode`}
           >
             <Button size={"sm"} onClick={toggleColorMode}>
-              {colorMode === "light" ? "🌚" : "🌞"}
+              {colorMode === "light" ? <MoonIcon /> : <SunIcon />}
             </Button>
           </Tooltip>
         </Flex>
-
-        {!isUserLoading && user ? (
+      </Container>
+      {isUserLoading ? (
+        <Center height={"80vh"}>
+          <Spinner size={"xl"} />
+        </Center>
+      ) : user ? (
+        <Container maxW={"container.lg"} mb="10">
           <main>
             <Heading as="h1" size={["3xl", null, "4xl"]}>
               Rathskeller Game Night
@@ -977,12 +1014,10 @@ function App() {
 
             <ActivityView />
           </main>
-        ) : (
-          <Heading as={"p"} fontSize={"3xl"}>
-            Login with Discord to get started.
-          </Heading>
-        )}
-      </Container>
+        </Container>
+      ) : (
+        <LoggedOutView />
+      )}
     </AppContext.Provider>
   );
 }
