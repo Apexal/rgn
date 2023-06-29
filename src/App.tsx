@@ -84,7 +84,13 @@ import "./app.css";
 import windowsIcon from "./assets/windows.png";
 import macOSIcon from "./assets/macos.png";
 import cellPhoneIcon from "./assets/mobile.png";
-import { EditIcon, InfoOutlineIcon, MoonIcon, SunIcon, TriangleUpIcon } from "@chakra-ui/icons";
+import {
+  EditIcon,
+  InfoOutlineIcon,
+  MoonIcon,
+  SunIcon,
+  TriangleUpIcon,
+} from "@chakra-ui/icons";
 
 ChartJS.register(
   CategoryScale,
@@ -302,7 +308,7 @@ function ActivityCard({ activity }: { activity: Activity }) {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const cancelRef =
     useRef<AlertDialogProps["leastDestructiveRef"]["current"]>(null);
-  const canVote = !!player && !!activeEvent;
+  const canVote = player?.is_verified && !!activeEvent;
 
   const intervalID = useRef<number | null>(null);
   const [thumbnailIndex, setThumbnailIndex] = useState(0);
@@ -466,7 +472,11 @@ function ActivityCard({ activity }: { activity: Activity }) {
           <>
             <Divider />
             <CardFooter>
-              <ButtonGroup spacing={2} justifyContent={"space-between"} flex={"1"}>
+              <ButtonGroup
+                spacing={2}
+                justifyContent={"space-between"}
+                flex={"1"}
+              >
                 {canVote &&
                   (isVotedForByPlayer ? (
                     <Button
@@ -487,10 +497,7 @@ function ActivityCard({ activity }: { activity: Activity }) {
                     </Button>
                   ))}
                 {player && (
-                  <Button
-                    variant="ghost"
-                    colorScheme="blue"
-                  >
+                  <Button variant="ghost" colorScheme="blue">
                     <InfoOutlineIcon />
                   </Button>
                 )}
@@ -657,7 +664,9 @@ function ActiveEventView() {
               width={"100%"}
               display={"flex"}
             >
-              {rsvps.length === 0 && <Text>Nobody yet. Be the first to RSVP!</Text>}
+              {rsvps.length === 0 && (
+                <Text>Nobody yet. Be the first to RSVP!</Text>
+              )}
               <Wrap spacing={"3"}>
                 {rsvps?.map((rsvp) => (
                   <WrapItem key={rsvp.player_id} className="slideIn from-right">
@@ -680,7 +689,11 @@ function ActiveEventView() {
                 I'm NOT Coming
               </Button>
             ) : (
-              <Button colorScheme={"green"} onClick={() => toggleRSVP()} id="rsvp-button">
+              <Button
+                colorScheme={"green"}
+                onClick={() => toggleRSVP()}
+                id="rsvp-button"
+              >
                 I'm Coming
               </Button>
             )}
@@ -718,7 +731,7 @@ function ActiveEventView() {
 }
 
 /** Alert with warning explaining that the user must be manually verified to continue. */
-function NoPlayerView() {
+function UnverifiedPlayerView() {
   return (
     <Alert
       status="warning"
@@ -795,7 +808,7 @@ function ActivityView() {
     isActivitiesLoading,
   } = useContext(AppContext);
 
-  const canVote = !!player && !!activeEvent;
+  const canVote = player?.is_verified && !!activeEvent;
 
   return (
     <>
@@ -991,15 +1004,17 @@ function App() {
               Rathskeller Game Night
             </Heading>
 
-            <Skeleton isLoaded={!isPlayerLoading && !isEventsLoading}>
-              {player ? (
+            <Skeleton
+              isLoaded={!isPlayerLoading && !isEventsLoading && !!player}
+            >
+              {player?.is_verified ? (
                 activeEvent ? (
                   <ActiveEventView />
                 ) : (
                   <NoActiveEventView />
                 )
               ) : (
-                <NoPlayerView />
+                <UnverifiedPlayerView />
               )}
             </Skeleton>
 

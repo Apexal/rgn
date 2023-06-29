@@ -3,7 +3,7 @@ export type Json =
   | number
   | boolean
   | null
-  | { [key: string]: Json }
+  | { [key: string]: Json | undefined }
   | Json[]
 
 export interface Database {
@@ -110,20 +110,26 @@ export interface Database {
         Row: {
           created_at: string | null
           id: string
+          is_verified: boolean
           name: string | null
           platforms: string[]
+          steam_profile_url: string | null
         }
         Insert: {
           created_at?: string | null
           id: string
+          is_verified?: boolean
           name?: string | null
           platforms?: string[]
+          steam_profile_url?: string | null
         }
         Update: {
           created_at?: string | null
           id?: string
+          is_verified?: boolean
           name?: string | null
           platforms?: string[]
+          steam_profile_url?: string | null
         }
         Relationships: [
           {
