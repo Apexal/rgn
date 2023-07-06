@@ -6,6 +6,7 @@ export type Event = Database["public"]["Tables"]["events"]["Row"];
 export type RSVP = Database["public"]["Tables"]["rsvps"]["Row"];
 export type Player = Database["public"]["Tables"]["players"]["Row"];
 export type Vote = Database["public"]["Tables"]["votes"]["Row"];
+export type PlayerActivityMetadata = Database["public"]["Tables"]["player_activity_metadata"]["Row"];
 
 const supabaseUrl = "https://dmxnczlntlpsvwgutlml.supabase.co";
 const supabaseKey =

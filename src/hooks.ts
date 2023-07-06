@@ -3,6 +3,15 @@ import { useState, useEffect } from "react";
 import { Database } from "./database.types";
 import { supabase } from "./db";
 
+export function useNow() {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const intervalID = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(intervalID)
+  }, []);
+  return now;
+}
+
 export function useLoading() {
   return useState<boolean>(true);
 }

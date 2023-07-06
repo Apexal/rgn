@@ -1,3 +1,15 @@
+.favorite-icon {
+  transition: opacity 0.1s ease-in;
+}
+
+.activity-card .favorite-icon:not(.favorited) {
+  display: none;
+}
+
+.activity-card:hover .favorite-icon {
+  display: inherit;
+}
+
 .slideIn {
   animation-name: slideIn;
   animation-duration: 0.5s;

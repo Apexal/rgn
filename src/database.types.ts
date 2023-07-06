@@ -38,6 +38,7 @@ export interface Database {
         Row: {
           created_at: string | null
           description: string | null
+          discord_channel_id: string | null
           id: number
           max_players: number | null
           min_players: number
@@ -46,6 +47,7 @@ export interface Database {
           price: number | null
           price_type: string | null
           recommended_players: number | null
+          storage_required: string | null
           summary: string | null
           tags: string[]
           thumbnail_urls: string[]
@@ -54,6 +56,7 @@ export interface Database {
         Insert: {
           created_at?: string | null
           description?: string | null
+          discord_channel_id?: string | null
           id?: number
           max_players?: number | null
           min_players?: number
@@ -62,6 +65,7 @@ export interface Database {
           price?: number | null
           price_type?: string | null
           recommended_players?: number | null
+          storage_required?: string | null
           summary?: string | null
           tags?: string[]
           thumbnail_urls?: string[]
@@ -70,6 +74,7 @@ export interface Database {
         Update: {
           created_at?: string | null
           description?: string | null
+          discord_channel_id?: string | null
           id?: number
           max_players?: number | null
           min_players?: number
@@ -78,6 +83,7 @@ export interface Database {
           price?: number | null
           price_type?: string | null
           recommended_players?: number | null
+          storage_required?: string | null
           summary?: string | null
           tags?: string[]
           thumbnail_urls?: string[]
@@ -105,6 +111,46 @@ export interface Database {
           start_at?: string
         }
         Relationships: []
+      }
+      player_activity_metadata: {
+        Row: {
+          activity_id: number
+          created_at: string | null
+          id: number
+          is_favorite: boolean
+          is_setup: boolean | null
+          player_id: string
+        }
+        Insert: {
+          activity_id: number
+          created_at?: string | null
+          id?: number
+          is_favorite?: boolean
+          is_setup?: boolean | null
+          player_id: string
+        }
+        Update: {
+          activity_id?: number
+          created_at?: string | null
+          id?: number
+          is_favorite?: boolean
+          is_setup?: boolean | null
+          player_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_activity_metadata_activity_id_fkey"
+            columns: ["activity_id"]
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_activity_metadata_player_id_fkey"
+            columns: ["player_id"]
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       players: {
         Row: {

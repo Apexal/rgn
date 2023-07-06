@@ -12,7 +12,6 @@ import {
   AlertIcon,
   AlertTitle,
   Avatar,
-  AvatarBadge,
   AvatarGroup,
   Box,
   Button,
@@ -75,8 +74,14 @@ import { Bar } from "react-chartjs-2";
 import formatRelative from "date-fns/formatRelative";
 
 import { SubmitHandler, useForm } from "react-hook-form";
-import { Activity, Player, Event, supabase } from "./db";
-import { RowFilters, useRow, useRows, useUser } from "./hooks";
+import {
+  Activity,
+  Player,
+  Event,
+  supabase,
+  PlayerActivityMetadata,
+} from "./db";
+import { RowFilters, useNow, useRow, useRows, useUser } from "./hooks";
 import { AppContext } from "./store";
 
 import "./app.css";
@@ -88,9 +93,14 @@ import {
   EditIcon,
   InfoOutlineIcon,
   MoonIcon,
+  StarIcon,
   SunIcon,
   TriangleUpIcon,
 } from "@chakra-ui/icons";
+import subDays from "date-fns/subDays";
+import { Interval, endOfDay, isPast, isWithinInterval } from "date-fns";
+import formatDistance from "date-fns/formatDistance";
+import format from "date-fns/format";
 
 ChartJS.register(
   CategoryScale,
@@ -302,7 +312,13 @@ function ActivitySkeleton() {
 }
 
 /** Displays the details of an activity along with actions to vote and favorite. */
-function ActivityCard({ activity }: { activity: Activity }) {
+function ActivityCard({
+  activity,
+  playerMetadata,
+}: {
+  activity: Activity;
+  playerMetadata?: PlayerActivityMetadata;
+}) {
   const toast = useToast();
   const { player, activeEvent, votes, rsvps } = useContext(AppContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -394,11 +410,32 @@ function ActivityCard({ activity }: { activity: Activity }) {
           status: "error",
         });
       } else {
-        toast({
-          description: "Submitted your vote!",
-          status: "success",
-        });
+        // TODO: toast if not setup
       }
+    }
+  };
+
+  const toggleFavorite = async () => {
+    if (!player) {
+      return null;
+    }
+
+    const { error } = await supabase.from("player_activity_metadata").upsert(
+      {
+        player_id: player.id,
+        activity_id: activity.id,
+        is_favorite: !playerMetadata?.is_favorite,
+      },
+      {
+        onConflict: "player_id,activity_id",
+      }
+    );
+
+    if (error) {
+      toast({
+        description: "There was an error... Yell at Frank to fix this!",
+        status: "error",
+      });
     }
   };
 
@@ -416,6 +453,19 @@ function ActivityCard({ activity }: { activity: Activity }) {
         onMouseLeave={() => stopThumbnailLoop()}
         className="activity-card"
       >
+        <StarIcon
+          className={
+            "favorite-icon " + (playerMetadata?.is_favorite ? "favorited" : "")
+          }
+          position={"absolute"}
+          right={"-2"}
+          top={"-3"}
+          opacity={playerMetadata?.is_favorite ? 1 : 0.2}
+          color={"yellow.400"}
+          boxSize={"8"}
+          cursor={"pointer"}
+          onClick={toggleFavorite}
+        />
         <CardBody display={"flex"} flexDirection={"column"}>
           <Image
             borderRadius={"lg"}
@@ -558,6 +608,37 @@ function ActivityCard({ activity }: { activity: Activity }) {
   );
 }
 
+function ActiveEventCountdownSubtitle() {
+  const now = useNow();
+
+  const { activeEvent } = useContext(AppContext);
+
+  if (!activeEvent) {
+    return null;
+  }
+
+  const eventStart = new Date(activeEvent.start_at);
+
+  if (now > eventStart) {
+    return null;
+  }
+
+  const distance = formatDistance(eventStart, now, {
+    addSuffix: true,
+    includeSeconds: true,
+  });
+  const formatted = format(eventStart, "EEEE 'at' p 'ET'");
+
+  return (
+    <Text lineHeight={"taller"} fontSize={"3xl"}>
+      We start in{" "}
+      <Tooltip placement="right" label={formatted}>
+        <strong>{distance}</strong>
+      </Tooltip>
+    </Text>
+  );
+}
+
 /** Overview of active event displaying RSVPs, votes, and actions to RSVP. */
 function ActiveEventView() {
   const toast = useToast();
@@ -651,7 +732,7 @@ function ActiveEventView() {
 
   return (
     <>
-      <Box p={"6"} borderWidth={"1px"} borderRadius={"lg"} my={"10"}>
+      <Box p={"6"} borderRadius={"lg"} my={"10"}>
         <Flex gap={"3"} direction={{ base: "column", md: "row" }}>
           <Stack flex={"1"}>
             <Heading as="h3">Votes</Heading>
@@ -671,9 +752,7 @@ function ActiveEventView() {
                 {rsvps?.map((rsvp) => (
                   <WrapItem key={rsvp.player_id} className="slideIn from-right">
                     <Tooltip label={rsvp.players.name ?? "Unnamed Player"}>
-                      <Avatar name={rsvp.players.name ?? "?"}>
-                        <AvatarBadge bg="green.500" boxSize={"1.25em"} />
-                      </Avatar>
+                      <Avatar name={rsvp.players.name ?? "?"}></Avatar>
                     </Tooltip>
                   </WrapItem>
                 ))}
@@ -810,6 +889,55 @@ function ActivityView() {
 
   const canVote = player?.is_verified && !!activeEvent;
 
+  const activtyMetadataFilters = useMemo<RowFilters>(() => {
+    if (player) {
+      return {
+        initial: [["player_id", "eq", player?.id]],
+        update: `player_id=eq.${player?.id}`,
+      };
+    } else {
+      return false;
+    }
+  }, [player]);
+  const [
+    isActivityMetadatasLoading,
+    activityMetadatasError,
+    activityMetadatas,
+  ] = useRows<PlayerActivityMetadata>(
+    "player_activity_metadata",
+    activtyMetadataFilters
+  );
+
+  useEffect(() => {
+    if (activityMetadatasError) {
+      console.error(activityMetadatasError);
+    }
+  }, [activityMetadatasError]);
+
+  const sortedActivities = useMemo(
+    () =>
+      activities.sort((actA, actB) => {
+        const isAFavorite =
+          activityMetadatas.find((m) => m.activity_id === actA.id)
+            ?.is_favorite ?? false;
+        const isBFavorite =
+          activityMetadatas.find((m) => m.activity_id === actB.id)
+            ?.is_favorite ?? false;
+
+        if (isAFavorite > isBFavorite) {
+          return -1;
+        } else if (isBFavorite > isAFavorite) {
+          return 1;
+        } else {
+          return (
+            new Date(actA.created_at!).getTime() -
+            new Date(actB.created_at!).getTime()
+          );
+        }
+      }),
+    [activities, activityMetadatas]
+  );
+
   return (
     <>
       <Heading>
@@ -822,10 +950,18 @@ function ActivityView() {
         </Alert>
       )}
       <SimpleGrid columns={[1, 2, 3]} spacing={10} my={10}>
-        {isActivitiesLoading && !activities
-          ? [1, 2, 3].map((_, index) => <ActivitySkeleton key={index} />)
-          : activities!.map((activity) => (
-              <ActivityCard key={activity.id} activity={activity} />
+        {isActivitiesLoading && !sortedActivities
+          ? [1, 2, 3, 4, 5, 6, 7].map((_, index) => (
+              <ActivitySkeleton key={index} />
+            ))
+          : sortedActivities!.map((activity) => (
+              <ActivityCard
+                key={activity.id}
+                activity={activity}
+                playerMetadata={activityMetadatas.find(
+                  (m) => m.activity_id === activity.id
+                )}
+              />
             ))}
       </SimpleGrid>
 
@@ -883,14 +1019,16 @@ function App() {
 
   // Find today's event (or null)
   const activeEvent = useMemo<Event | null>(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const now = new Date();
 
     return (
       events.find((event) => {
-        const eventDay = new Date(event.start_at);
-        eventDay.setHours(0, 0, 0, 0);
-        return eventDay.getTime() === today.getTime();
+        const eventStart = new Date(event.start_at);
+        const eventActiveInterval: Interval = {
+          start: subDays(eventStart, 1),
+          end: event.end_at ? new Date(event.end_at) : endOfDay(eventStart),
+        };
+        return isWithinInterval(now, eventActiveInterval);
       }) ?? null
     );
   }, [events]);
@@ -1000,9 +1138,10 @@ function App() {
       ) : user ? (
         <Container maxW={"container.lg"} mb="10">
           <main>
-            <Heading as="h1" size={["3xl", null, "4xl"]}>
+            <Heading as="h1" size={["2xl", null, "3xl"]}>
               Rathskeller Game Night
             </Heading>
+            <ActiveEventCountdownSubtitle />
 
             <Skeleton
               isLoaded={!isPlayerLoading && !isEventsLoading && !!player}
@@ -1017,7 +1156,7 @@ function App() {
                 <UnverifiedPlayerView />
               )}
             </Skeleton>
-
+            <Divider marginY={"8"} />
             <ActivityView />
           </main>
         </Container>
