@@ -84,7 +84,7 @@ import {
   Title,
 } from "chart.js";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Bar } from "react-chartjs-2";
+import { Bar, getElementAtEvent } from "react-chartjs-2";
 
 import formatRelative from "date-fns/formatRelative";
 
@@ -472,6 +472,7 @@ function ActivityCard({
         onMouseEnter={() => startThumbnailLoop()}
         onMouseLeave={() => stopThumbnailLoop()}
         className="activity-card"
+        id={"activity-" + activity.id}
       >
         <StarIcon
           className={
@@ -803,7 +804,7 @@ function ActiveEventCountdownSubtitle() {
   const formatted = format(eventStart, "EEEE 'at' p 'ET'");
 
   return (
-    <Text lineHeight={"taller"} fontSize={"3xl"}>
+    <Text lineHeight={"taller"} fontSize={["2xl", null, "3xl"]}>
       We start in{" "}
       <Tooltip placement="right" label={formatted}>
         <strong>{distance}</strong>
@@ -816,6 +817,7 @@ function ActiveEventCountdownSubtitle() {
 function ActiveEventView() {
   const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const chartRef = useRef();
   const cancelRef =
     useRef<AlertDialogProps["leastDestructiveRef"]["current"]>(null);
   const {
@@ -838,7 +840,7 @@ function ActiveEventView() {
     (rsvp) => rsvp.player_id === user.id && rsvp.event_id === activeEvent.id
   );
 
-  const activitiesWithVotes = activities.reduce((obj, act) => {
+  const activitiesWithVotes: Record<string, number> = activities.reduce((obj, act) => {
     const voteCount = votes.filter(
       (vote) => vote.activity_id === act.id
     ).length;
@@ -851,13 +853,17 @@ function ActiveEventView() {
     return obj;
   }, {});
 
+  const activityNamesSortedByVotes = Object.keys(activitiesWithVotes).sort((nameA, nameB) => {
+    return activitiesWithVotes[nameB] - activitiesWithVotes[nameA];
+  });
+
   const data: ChartData<"bar"> = useMemo(
     () => ({
-      labels: Object.keys(activitiesWithVotes),
+      labels: activityNamesSortedByVotes,
       datasets: [
         {
           label: "Votes",
-          data: Object.values(activitiesWithVotes),
+          data: activityNamesSortedByVotes.map(name => activitiesWithVotes[name]),
           borderColor: teal500,
           backgroundColor: teal600,
         },
@@ -917,6 +923,22 @@ function ActiveEventView() {
     }
   };
 
+  const handleVoteGraphClick = (event) => {
+    const element = getElementAtEvent(chartRef.current, event)[0];
+    if (!element) {
+      return;
+    }
+    const activityName = activityNamesSortedByVotes[element.index];
+    if (!activityName) {
+      return;
+    }
+    const activityID = activities.find(act => act.name === activityName)?.id;
+    if (!activityID) {
+      return;
+    }
+    document.getElementById("activity-"+activityID)?.scrollIntoView();
+  }
+
   return (
     <>
       <Box p={"6"} borderRadius={"lg"} my={"10"}>
@@ -930,7 +952,7 @@ function ActiveEventView() {
                 : `${votes.length} Votes`}{" "}
               Cast
             </Heading>
-            <Bar options={options} data={data} height={"100%"} />
+            <Bar ref={chartRef} options={options} data={data} height={"100%"} onClick={handleVoteGraphClick} />
           </Stack>
           <Stack spacing={"5"} flex={"1"}>
             <Heading as="h3">Who's Coming?</Heading>
