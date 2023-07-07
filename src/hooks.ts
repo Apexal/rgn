@@ -6,7 +6,7 @@ import { supabase } from "./db";
 export function useNow() {
   const [now, setNow] = useState(new Date());
   useEffect(() => {
-    const intervalID = setInterval(() => setNow(new Date()), 1000);
+    const intervalID = setInterval(() => setNow(new Date()), 1000 * 60);
     return () => clearInterval(intervalID)
   }, []);
   return now;

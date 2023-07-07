@@ -47,6 +47,7 @@ export interface Database {
           price: number | null
           price_type: string | null
           recommended_players: number | null
+          setup_steps: Json[]
           storage_required: string | null
           summary: string | null
           tags: string[]
@@ -65,6 +66,7 @@ export interface Database {
           price?: number | null
           price_type?: string | null
           recommended_players?: number | null
+          setup_steps?: Json[]
           storage_required?: string | null
           summary?: string | null
           tags?: string[]
@@ -83,6 +85,7 @@ export interface Database {
           price?: number | null
           price_type?: string | null
           recommended_players?: number | null
+          setup_steps?: Json[]
           storage_required?: string | null
           summary?: string | null
           tags?: string[]

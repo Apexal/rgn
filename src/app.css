@@ -40,3 +40,24 @@
     opacity: 1;
   }
 }
+
+
+.markdown h1 {
+  font-size: 2rem;
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+}
+
+.markdown p {
+  margin-bottom: 1rem;
+}
+
+.markdown ul, .markdown ol {
+  margin-left: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.markdown a {
+  text-decoration: underline;
+  font-weight: 500;
+}

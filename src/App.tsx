@@ -1,4 +1,5 @@
-import type { AlertDialogProps } from "@chakra-ui/react";
+import type { AlertDialogProps, UseModalProps } from "@chakra-ui/react";
+import ReactMarkdown from "react-markdown";
 import {
   Alert,
   AlertDescription,
@@ -49,6 +50,19 @@ import {
   Spacer,
   Spinner,
   Stack,
+  Stat,
+  StatHelpText,
+  StatLabel,
+  StatNumber,
+  Step,
+  StepDescription,
+  StepIcon,
+  StepIndicator,
+  StepNumber,
+  StepSeparator,
+  StepStatus,
+  StepTitle,
+  Stepper,
   Tag,
   Text,
   Tooltip,
@@ -56,6 +70,7 @@ import {
   WrapItem,
   useColorMode,
   useDisclosure,
+  useSteps,
   useToast,
   useToken,
 } from "@chakra-ui/react";
@@ -90,6 +105,7 @@ import windowsIcon from "./assets/windows.png";
 import macOSIcon from "./assets/macos.png";
 import cellPhoneIcon from "./assets/mobile.png";
 import {
+  CheckIcon,
   EditIcon,
   InfoOutlineIcon,
   MoonIcon,
@@ -102,13 +118,7 @@ import { Interval, endOfDay, isPast, isWithinInterval } from "date-fns";
 import formatDistance from "date-fns/formatDistance";
 import format from "date-fns/format";
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  ChartTooltip,
-);
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, ChartTooltip);
 
 const options = {
   indexAxis: "x" as const,
@@ -121,10 +131,10 @@ const options = {
   scales: {
     y: {
       ticks: {
-        precision: 0
-      }
-    }
-  }
+        precision: 0,
+      },
+    },
+  },
 };
 
 function formatMoney(cents: number) {
@@ -322,8 +332,17 @@ function ActivityCard({
 }) {
   const toast = useToast();
   const { player, activeEvent, votes, rsvps } = useContext(AppContext);
-  const { isOpen, onOpen, onClose } = useDisclosure();
-  const cancelRef =
+  const {
+    isOpen: isRsvpDialogOpen,
+    onOpen: onRsvpDialogOpen,
+    onClose: onRsvpDialogClose,
+  } = useDisclosure();
+  const {
+    isOpen: isInfoModalOpen,
+    onOpen: onInfoModalOpen,
+    onClose: onInfoModalClose,
+  } = useDisclosure();
+  const rsvpDialogCancelRef =
     useRef<AlertDialogProps["leastDestructiveRef"]["current"]>(null);
   const canVote = player?.is_verified && !!activeEvent;
 
@@ -396,7 +415,7 @@ function ActivityCard({
       }
     } else {
       if (requireRSVP && !isUserRsvped) {
-        return onOpen();
+        return onRsvpDialogOpen();
       }
       const { error } = await supabase.from("votes").insert({
         event_id: activeEvent.id,
@@ -488,7 +507,8 @@ function ActivityCard({
             </Wrap>
             <Spacer />
             <Flex gap={2} alignItems={"center"}>
-              {activity.price ? (
+              {playerMetadata?.is_setup ? <Text color="blue.600" fontSize="xl" fontWeight={"bold"}>Owned
+                </Text> : activity.price ? (
                 <Text color="blue.600" fontSize="xl">
                   <strong>{formatMoney(activity.price)}</strong>{" "}
                   {activity.price_type === "subscription" && "subscription"}
@@ -548,9 +568,16 @@ function ActivityCard({
                     </Button>
                   ))}
                 {player && (
-                  <Button variant="ghost" colorScheme="blue">
+                  <Tooltip label="Setup guide">
+                  <Button
+                    variant="ghost"
+                    colorScheme="blue"
+                    onClick={onInfoModalOpen}
+                  >
                     <InfoOutlineIcon />
                   </Button>
+
+                  </Tooltip>
                 )}
               </ButtonGroup>
             </CardFooter>
@@ -580,9 +607,9 @@ function ActivityCard({
 
       <AlertDialog
         motionPreset="slideInBottom"
-        leastDestructiveRef={cancelRef}
-        onClose={onClose}
-        isOpen={isOpen}
+        leastDestructiveRef={rsvpDialogCancelRef}
+        onClose={onRsvpDialogClose}
+        isOpen={isRsvpDialogOpen}
         isCentered
       >
         <AlertDialogOverlay />
@@ -594,18 +621,164 @@ function ActivityCard({
             By casting a vote, you are RSVPing to game night tonight.
           </AlertDialogBody>
           <AlertDialogFooter>
-            <Button onClick={onClose}>Cancel</Button>
+            <Button onClick={onRsvpDialogClose}>Cancel</Button>
             <Button
               colorScheme="green"
               ml={"3"}
-              onClick={() => rsvp().then(() => toggleVote(false).then(onClose))}
+              onClick={() =>
+                rsvp().then(() => toggleVote(false).then(onRsvpDialogClose))
+              }
             >
               RSVP & Vote
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ActivityInfoModal
+        activity={activity}
+        playerMetadata={playerMetadata}
+        isOpen={isInfoModalOpen}
+        onClose={onInfoModalClose}
+      />
     </>
+  );
+}
+
+function ActivityInfoModal({
+  isOpen,
+  onClose,
+  activity,
+  playerMetadata,
+}: {
+  isOpen: boolean;
+  activity: Activity;
+  onClose: UseModalProps["onClose"];
+  playerMetadata?: PlayerActivityMetadata;
+}) {
+  const { player } = useContext(AppContext);
+  const { activeStep, setActiveStep } = useSteps({
+    index: 1,
+    count: activity.setup_steps.length,
+  });
+
+  const setupSteps = activity.setup_steps as {
+    title: string;
+    description?: string;
+  }[];
+
+  const markSetup = async () => {
+    if (!player) {
+      return;
+    }
+
+    const { error } = await supabase.from("player_activity_metadata").upsert(
+      {
+        player_id: player.id,
+        activity_id: activity.id,
+        is_setup: true,
+      },
+      {
+        onConflict: "player_id,activity_id",
+      }
+    );
+
+    if (error) {
+      console.error(error);
+    }
+  };
+
+  return (
+    <Modal
+      size={"xl"}
+      closeOnOverlayClick={false}
+      isOpen={isOpen}
+      onClose={onClose}
+    >
+      <ModalOverlay />
+      <ModalContent>
+        <ModalHeader>{activity.name} Setup Guide</ModalHeader>
+        <ModalCloseButton />
+        <ModalBody>
+          <Divider marginBottom={"3"} />
+          <Stack direction={"row"}>
+            <Stat>
+              <StatLabel>Price</StatLabel>
+              <StatNumber>{formatMoney(activity.price ?? 0)}</StatNumber>
+              <StatHelpText>
+              {!activity.price ? "Free!!!" : activity.price_type === "subscription" ? "subscription" : "one-time"}
+              </StatHelpText>
+            </Stat>
+
+            {activity.recommended_players && (
+              <Stat>
+                <StatLabel>Players</StatLabel>
+                <StatNumber>
+                  {activity.min_players ?? "?"} - {activity.max_players ?? "?"}
+                </StatNumber>
+                {activity.recommended_players && (
+                  <StatHelpText>
+                    {activity.recommended_players} recommended
+                  </StatHelpText>
+                )}
+              </Stat>
+            )}
+
+            {activity.storage_required && (
+              <Stat>
+                <StatLabel>Storage Required</StatLabel>
+                <StatNumber>{activity.storage_required}</StatNumber>
+                <StatHelpText>Gigabytes</StatHelpText>
+              </Stat>
+            )}
+          </Stack>
+
+          <Divider marginY={"3"} />
+
+          {activity.description ? (
+            <ReactMarkdown
+              className="markdown"
+              children={activity.description}
+            />
+          ) : <Text color={"gray.300"}>Frank is still working on getting a description and setup steps in for {activity.name}. Google it for now!</Text>}
+          <Stepper index={activeStep} orientation="vertical">
+            {setupSteps.map((step, index) => (
+              <Step key={index} onClick={() => setActiveStep(index)}>
+                <StepIndicator>
+                  <StepStatus
+                    complete={<StepIcon />}
+                    incomplete={<StepNumber />}
+                    active={<StepNumber />}
+                  />
+                </StepIndicator>
+                <Box flexShrink={"0"}>
+                  <StepTitle>{step.title}</StepTitle>
+                  {step.description && (
+                    <StepDescription>
+                      <ReactMarkdown
+                        className="markdown"
+                        children={step.description}
+                      />
+                    </StepDescription>
+                  )}
+                </Box>
+                <StepSeparator />
+              </Step>
+            ))}
+          </Stepper>
+        </ModalBody>
+        <ModalFooter justifyContent={"self-start"}>
+          <Button
+            colorScheme="teal"
+            onClick={markSetup}
+            isDisabled={playerMetadata?.is_setup ?? false}
+            leftIcon={playerMetadata?.is_setup ? <CheckIcon /> : undefined}
+          >
+            I own and have setup {activity.name}!
+          </Button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
   );
 }
 
@@ -626,7 +799,6 @@ function ActiveEventCountdownSubtitle() {
 
   const distance = formatDistance(eventStart, now, {
     addSuffix: true,
-    includeSeconds: true,
   });
   const formatted = format(eventStart, "EEEE 'at' p 'ET'");
 
@@ -665,31 +837,34 @@ function ActiveEventView() {
   const isUserRsvped = rsvps.find(
     (rsvp) => rsvp.player_id === user.id && rsvp.event_id === activeEvent.id
   );
-  
+
   const activitiesWithVotes = activities.reduce((obj, act) => {
-    const voteCount = votes.filter((vote) => vote.activity_id === act.id).length;
+    const voteCount = votes.filter(
+      (vote) => vote.activity_id === act.id
+    ).length;
     if (voteCount) {
       return {
         ...obj,
-        [act.name]: voteCount
-      }
+        [act.name]: voteCount,
+      };
     }
     return obj;
-  }, {})
+  }, {});
 
-  
-
-  const data: ChartData<"bar"> = {
-    labels: Object.keys(activitiesWithVotes),
-    datasets: [
-      {
-        label: "Votes",
-        data: Object.values(activitiesWithVotes),
-        borderColor: teal500,
-        backgroundColor: teal600,
-      },
-    ],
-  };
+  const data: ChartData<"bar"> = useMemo(
+    () => ({
+      labels: Object.keys(activitiesWithVotes),
+      datasets: [
+        {
+          label: "Votes",
+          data: Object.values(activitiesWithVotes),
+          borderColor: teal500,
+          backgroundColor: teal600,
+        },
+      ],
+    }),
+    [activitiesWithVotes]
+  );
 
   const toggleRSVP = async () => {
     if (isUserRsvped) {
@@ -746,8 +921,15 @@ function ActiveEventView() {
     <>
       <Box p={"6"} borderRadius={"lg"} my={"10"}>
         <Flex gap={"3"} direction={{ base: "column", md: "row" }}>
-          <Stack flex={"1"} >
-            <Heading as="h3">{votes.length === 0 ? "No Votes" : votes.length === 1 ? "1 Vote" : `${votes.length} Votes`} Cast</Heading>
+          <Stack flex={"1"}>
+            <Heading as="h3">
+              {votes.length === 0
+                ? "No Votes"
+                : votes.length === 1
+                ? "1 Vote"
+                : `${votes.length} Votes`}{" "}
+              Cast
+            </Heading>
             <Bar options={options} data={data} height={"100%"} />
           </Stack>
           <Stack spacing={"5"} flex={"1"}>
@@ -927,6 +1109,7 @@ function ActivityView() {
     }
   }, [activityMetadatasError]);
 
+  /** Activites sorted by favorite and then by name A-Z. */
   const sortedActivities = useMemo(
     () =>
       activities.sort((actA, actB) => {
@@ -942,10 +1125,7 @@ function ActivityView() {
         } else if (isBFavorite > isAFavorite) {
           return 1;
         } else {
-          return (
-            new Date(actA.created_at!).getTime() -
-            new Date(actB.created_at!).getTime()
-          );
+          return actA.name.localeCompare(actB.name);
         }
       }),
     [activities, activityMetadatas]
@@ -954,7 +1134,12 @@ function ActivityView() {
   return (
     <>
       <Heading>
-        {canVote ? `What do you want to play ${formatRelative(new Date(activeEvent.start_at), now)}?` : "Our Activities"}
+        {canVote
+          ? `What do you want to play ${formatRelative(
+              new Date(activeEvent.start_at),
+              now
+            )}?`
+          : "Our Activities"}
       </Heading>
       {activitiesError && (
         <Alert status="error" my={"5"}>
