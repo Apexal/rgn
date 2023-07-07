@@ -795,13 +795,15 @@ function ActivityInfoModal({
 
           <Divider marginY={"3"} />
 
-          {activity.description ? (
+          {activity.description && (
             <ReactMarkdown
               className="markdown"
               children={activity.description}
             />
-          ) : (
-            <Text color={"gray.300"}>
+          )}
+
+          {!activity.description && !setupSteps.length && (
+            <Text color={"gray.300"} marginBottom={"3"}>
               Frank is still working on getting a description and setup steps in
               for {activity.name}. Google it for now!
             </Text>
@@ -816,10 +818,10 @@ function ActivityInfoModal({
                     active={<StepNumber />}
                   />
                 </StepIndicator>
-                <Box flexShrink={"0"}>
+                <Box>
                   <StepTitle>{step.title}</StepTitle>
                   {step.description && (
-                    <StepDescription>
+                    <StepDescription style={{ wordWrap: "break-word" }}>
                       <ReactMarkdown
                         className="markdown"
                         children={step.description}
@@ -839,7 +841,7 @@ function ActivityInfoModal({
             isDisabled={playerMetadata?.is_setup ?? false}
             leftIcon={playerMetadata?.is_setup ? <CheckIcon /> : undefined}
           >
-            I own and have setup {activity.name}!
+            I own and have setup {activity.name}
           </Button>
         </ModalFooter>
       </ModalContent>
