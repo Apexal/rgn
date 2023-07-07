@@ -114,7 +114,7 @@ import {
   TriangleUpIcon,
 } from "@chakra-ui/icons";
 import subDays from "date-fns/subDays";
-import { Interval, endOfDay, isPast, isWithinInterval } from "date-fns";
+import { Interval, endOfDay, isWithinInterval } from "date-fns";
 import formatDistance from "date-fns/formatDistance";
 import format from "date-fns/format";
 
@@ -1095,7 +1095,7 @@ function ActivityView() {
     }
   }, [player]);
   const [
-    isActivityMetadatasLoading,
+    _,
     activityMetadatasError,
     activityMetadatas,
   ] = useRows<PlayerActivityMetadata>(
