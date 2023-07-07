@@ -393,6 +393,28 @@ function ActivityCard({
     }
   };
 
+  const markSetup = async () => {
+    if (!player) {
+      return;
+    }
+
+    const { error } = await supabase.from("player_activity_metadata").upsert(
+      {
+        player_id: player.id,
+        activity_id: activity.id,
+        is_setup: true,
+      },
+      {
+        onConflict: "player_id,activity_id",
+      }
+    );
+    toast.closeAll();
+
+    if (error) {
+      console.error(error);
+    }
+  };
+
   const toggleVote = async (requireRSVP: boolean = true) => {
     if (!activeEvent || !player) {
       return;
@@ -430,7 +452,38 @@ function ActivityCard({
           status: "error",
         });
       } else {
-        // TODO: toast if not setup
+        if (!playerMetadata?.is_setup) {
+          const actions = [];
+          if (activity.price) {
+            actions.push("purchase");
+          }
+          if (activity.storage_required) {
+            actions.push("install");
+          }
+          actions.push("setup");
+
+          toast({
+            status: "warning",
+            title: `Setup ${activity.name} In Advance`,
+            duration: 3000,
+            description: (
+              <Box>
+                <Text>
+                  Make you to {actions.join("/")} {activity.name} now to be
+                  ready to play later.
+                </Text>
+                <HStack spacing={"8"} justifyContent={"space-between"}>
+                  <Button onClick={onInfoModalOpen} variant={"unstyled"}>
+                    Open Setup Guide
+                  </Button>
+                  <Button onClick={markSetup} variant={"unstyled"}>
+                    Already Done!
+                  </Button>
+                </HStack>
+              </Box>
+            ),
+          });
+        }
       }
     }
   };
@@ -508,8 +561,11 @@ function ActivityCard({
             </Wrap>
             <Spacer />
             <Flex gap={2} alignItems={"center"}>
-              {playerMetadata?.is_setup ? <Text color="blue.600" fontSize="xl" fontWeight={"bold"}>Owned
-                </Text> : activity.price ? (
+              {playerMetadata?.is_setup ? (
+                <Text color="blue.600" fontSize="xl" fontWeight={"bold"}>
+                  Owned
+                </Text>
+              ) : activity.price ? (
                 <Text color="blue.600" fontSize="xl">
                   <strong>{formatMoney(activity.price)}</strong>{" "}
                   {activity.price_type === "subscription" && "subscription"}
@@ -570,14 +626,13 @@ function ActivityCard({
                   ))}
                 {player && (
                   <Tooltip label="Setup guide">
-                  <Button
-                    variant="ghost"
-                    colorScheme="blue"
-                    onClick={onInfoModalOpen}
-                  >
-                    <InfoOutlineIcon />
-                  </Button>
-
+                    <Button
+                      variant="ghost"
+                      colorScheme="blue"
+                      onClick={onInfoModalOpen}
+                    >
+                      <InfoOutlineIcon />
+                    </Button>
                   </Tooltip>
                 )}
               </ButtonGroup>
@@ -707,7 +762,11 @@ function ActivityInfoModal({
               <StatLabel>Price</StatLabel>
               <StatNumber>{formatMoney(activity.price ?? 0)}</StatNumber>
               <StatHelpText>
-              {!activity.price ? "Free!!!" : activity.price_type === "subscription" ? "subscription" : "one-time"}
+                {!activity.price
+                  ? "Free!!!"
+                  : activity.price_type === "subscription"
+                  ? "subscription"
+                  : "one-time"}
               </StatHelpText>
             </Stat>
 
@@ -741,7 +800,12 @@ function ActivityInfoModal({
               className="markdown"
               children={activity.description}
             />
-          ) : <Text color={"gray.300"}>Frank is still working on getting a description and setup steps in for {activity.name}. Google it for now!</Text>}
+          ) : (
+            <Text color={"gray.300"}>
+              Frank is still working on getting a description and setup steps in
+              for {activity.name}. Google it for now!
+            </Text>
+          )}
           <Stepper index={activeStep} orientation="vertical">
             {setupSteps.map((step, index) => (
               <Step key={index} onClick={() => setActiveStep(index)}>
@@ -817,7 +881,7 @@ function ActiveEventCountdownSubtitle() {
 function ActiveEventView() {
   const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const chartRef = useRef();
+  const chartRef = useRef<any>();
   const cancelRef =
     useRef<AlertDialogProps["leastDestructiveRef"]["current"]>(null);
   const {
@@ -840,22 +904,27 @@ function ActiveEventView() {
     (rsvp) => rsvp.player_id === user.id && rsvp.event_id === activeEvent.id
   );
 
-  const activitiesWithVotes: Record<string, number> = activities.reduce((obj, act) => {
-    const voteCount = votes.filter(
-      (vote) => vote.activity_id === act.id
-    ).length;
-    if (voteCount) {
-      return {
-        ...obj,
-        [act.name]: voteCount,
-      };
-    }
-    return obj;
-  }, {});
+  const activitiesWithVotes: Record<string, number> = activities.reduce(
+    (obj, act) => {
+      const voteCount = votes.filter(
+        (vote) => vote.activity_id === act.id
+      ).length;
+      if (voteCount) {
+        return {
+          ...obj,
+          [act.name]: voteCount,
+        };
+      }
+      return obj;
+    },
+    {}
+  );
 
-  const activityNamesSortedByVotes = Object.keys(activitiesWithVotes).sort((nameA, nameB) => {
-    return activitiesWithVotes[nameB] - activitiesWithVotes[nameA];
-  });
+  const activityNamesSortedByVotes = Object.keys(activitiesWithVotes).sort(
+    (nameA, nameB) => {
+      return activitiesWithVotes[nameB] - activitiesWithVotes[nameA];
+    }
+  );
 
   const data: ChartData<"bar"> = useMemo(
     () => ({
@@ -863,7 +932,9 @@ function ActiveEventView() {
       datasets: [
         {
           label: "Votes",
-          data: activityNamesSortedByVotes.map(name => activitiesWithVotes[name]),
+          data: activityNamesSortedByVotes.map(
+            (name) => activitiesWithVotes[name]
+          ),
           borderColor: teal500,
           backgroundColor: teal600,
         },
@@ -923,7 +994,9 @@ function ActiveEventView() {
     }
   };
 
-  const handleVoteGraphClick = (event) => {
+  const handleVoteGraphClick: React.MouseEventHandler<HTMLCanvasElement> = (
+    event
+  ) => {
     const element = getElementAtEvent(chartRef.current, event)[0];
     if (!element) {
       return;
@@ -932,12 +1005,12 @@ function ActiveEventView() {
     if (!activityName) {
       return;
     }
-    const activityID = activities.find(act => act.name === activityName)?.id;
+    const activityID = activities.find((act) => act.name === activityName)?.id;
     if (!activityID) {
       return;
     }
-    document.getElementById("activity-"+activityID)?.scrollIntoView();
-  }
+    document.getElementById("activity-" + activityID)?.scrollIntoView();
+  };
 
   return (
     <>
@@ -952,7 +1025,13 @@ function ActiveEventView() {
                 : `${votes.length} Votes`}{" "}
               Cast
             </Heading>
-            <Bar ref={chartRef} options={options} data={data} height={"100%"} onClick={handleVoteGraphClick} />
+            <Bar
+              ref={chartRef}
+              options={options}
+              data={data}
+              height={"100%"}
+              onClick={handleVoteGraphClick}
+            />
           </Stack>
           <Stack spacing={"5"} flex={"1"}>
             <Heading as="h3">Who's Coming?</Heading>
@@ -1116,14 +1195,11 @@ function ActivityView() {
       return false;
     }
   }, [player]);
-  const [
-    _,
-    activityMetadatasError,
-    activityMetadatas,
-  ] = useRows<PlayerActivityMetadata>(
-    "player_activity_metadata",
-    activtyMetadataFilters
-  );
+  const [_, activityMetadatasError, activityMetadatas] =
+    useRows<PlayerActivityMetadata>(
+      "player_activity_metadata",
+      activtyMetadataFilters
+    );
 
   useEffect(() => {
     if (activityMetadatasError) {
