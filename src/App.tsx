@@ -62,9 +62,9 @@ import {
 import {
   BarElement,
   CategoryScale,
+  ChartData,
   Chart as ChartJS,
   Tooltip as ChartTooltip,
-  Legend,
   LinearScale,
   Title,
 } from "chart.js";
@@ -108,22 +108,23 @@ ChartJS.register(
   BarElement,
   Title,
   ChartTooltip,
-  Legend
 );
 
 const options = {
-  indexAxis: "y" as const,
+  indexAxis: "x" as const,
   elements: {
     bar: {
       borderWidth: 2,
     },
   },
   responsive: true,
-  plugins: {
-    legend: {
-      position: "right" as const,
-    },
-  },
+  scales: {
+    y: {
+      ticks: {
+        precision: 0
+      }
+    }
+  }
 };
 
 function formatMoney(cents: number) {
@@ -664,15 +665,26 @@ function ActiveEventView() {
   const isUserRsvped = rsvps.find(
     (rsvp) => rsvp.player_id === user.id && rsvp.event_id === activeEvent.id
   );
+  
+  const activitiesWithVotes = activities.reduce((obj, act) => {
+    const voteCount = votes.filter((vote) => vote.activity_id === act.id).length;
+    if (voteCount) {
+      return {
+        ...obj,
+        [act.name]: voteCount
+      }
+    }
+    return obj;
+  }, {})
 
-  const data = {
-    labels: activities.map((act) => act.name),
+  
+
+  const data: ChartData<"bar"> = {
+    labels: Object.keys(activitiesWithVotes),
     datasets: [
       {
         label: "Votes",
-        data: activities.map(
-          (act) => votes.filter((vote) => vote.activity_id === act.id).length
-        ),
+        data: Object.values(activitiesWithVotes),
         borderColor: teal500,
         backgroundColor: teal600,
       },
@@ -734,9 +746,9 @@ function ActiveEventView() {
     <>
       <Box p={"6"} borderRadius={"lg"} my={"10"}>
         <Flex gap={"3"} direction={{ base: "column", md: "row" }}>
-          <Stack flex={"1"}>
-            <Heading as="h3">Votes</Heading>
-            <Bar options={options} data={data} />
+          <Stack flex={"1"} >
+            <Heading as="h3">{votes.length === 0 ? "No Votes" : votes.length === 1 ? "1 Vote" : `${votes.length} Votes`} Cast</Heading>
+            <Bar options={options} data={data} height={"100%"} />
           </Stack>
           <Stack spacing={"5"} flex={"1"}>
             <Heading as="h3">Who's Coming?</Heading>
@@ -879,6 +891,7 @@ function NoActiveEventView() {
 }
 
 function ActivityView() {
+  const now = useNow();
   const {
     player,
     activeEvent,
@@ -941,7 +954,7 @@ function ActivityView() {
   return (
     <>
       <Heading>
-        {canVote ? "What do you want to play tonight?" : "Our Activities"}
+        {canVote ? `What do you want to play ${formatRelative(new Date(activeEvent.start_at), now)}?` : "Our Activities"}
       </Heading>
       {activitiesError && (
         <Alert status="error" my={"5"}>
